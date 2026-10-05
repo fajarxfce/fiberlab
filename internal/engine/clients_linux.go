@@ -93,7 +93,7 @@ func (e *Engine) startClients(ctx context.Context) error {
 			return err
 		}
 		pppName := fmt.Sprintf("fp%s%d", strings.TrimPrefix(e.journal.RunID, "run-")[:6], i)
-		options := fmt.Sprintf("plugin %s\neth0\nuser %s\npassword %s\nifname %s\nlinkname %s\nnoauth\nnoipdefault\ndefaultroute\nnodefaultroute6\nnoipv6\nrefuse-eap\nrefuse-mschap\nrefuse-mschap-v2\nhide-password\npersist\nmaxfail 0\nholdoff 5\nlcp-echo-interval 5\nlcp-echo-failure 3\nnodetach\nmtu 1492\nmru 1492\nip-up-script /bin/true\nip-down-script /bin/true\nip-pre-up-script /bin/true\nauth-up-script /bin/true\nauth-down-script /bin/true\n", PPPPlugin(), pppQuote(sub.Username), pppQuote(sub.Password), pppName, ns)
+		options := fmt.Sprintf("plugin %s\neth0\nuser %s\npassword %s\nifname %s\nlinkname %s\nnoauth\nnoipdefault\ndefaultroute\nnodefaultroute6\nnoipv6\nrefuse-eap\nrefuse-mschap\nrefuse-mschap-v2\nhide-password\npersist\nmaxfail 0\nholdoff 5\nlcp-echo-interval 5\nlcp-echo-failure 3\nnodetach\nmtu 1492\nmru 1492\nip-up-script /bin/true\nip-down-script /bin/true\nip-pre-up-script /bin/true\n", PPPPlugin(), pppQuote(sub.Username), pppQuote(sub.Password), pppName, ns)
 		path := filepath.Join(dir, sub.ONUID+".options")
 		if err = os.WriteFile(path, []byte(options), 0600); err != nil {
 			handle.Close()

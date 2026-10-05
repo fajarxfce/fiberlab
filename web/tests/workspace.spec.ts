@@ -64,6 +64,7 @@ test('fits the complete network and reports stopped sessions', async ({
     view.sessions.every((s: any) => s.status === 'stopped' && !s.address)
   ).toBe(true);
   await page.reload();
+  await expect(page.locator('.svelte-flow__node')).toHaveCount(14);
   await expect.poll(allInside).toBe(true);
   await page.setViewportSize({ width: 1280, height: 980 });
   await expect.poll(allInside).toBe(true);

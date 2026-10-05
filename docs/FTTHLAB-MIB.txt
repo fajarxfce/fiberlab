@@ -1,0 +1,166 @@
+FTTHLAB-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, enterprises,
+    Integer32, Counter64
+        FROM SNMPv2-SMI
+    DisplayString
+        FROM SNMPv2-TC;
+
+exampleEnterprise OBJECT IDENTIFIER ::= { enterprises 32473 }
+
+ftthlab MODULE-IDENTITY
+    LAST-UPDATED "202610040000Z"
+    ORGANIZATION "Fiberlab local network simulator"
+    CONTACT-INFO "Local lab operator"
+    DESCRIPTION
+        "Experimental reference telemetry for Fiberlab. Uses the example PEN
+         from RFC 5612. This is not a HSGQ proprietary MIB or a production
+         assigned enterprise namespace. Optical telemetry is model output;
+         session counters are observations from Linux PPP."
+    REVISION "202610040000Z"
+    DESCRIPTION "Initial limited reference profile."
+    ::= { exampleEnterprise 42 }
+
+labNotifications OBJECT IDENTIFIER ::= { ftthlab 0 }
+
+onuTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF OnuEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "ONUs physically connected below this OLT, sorted by ONU ID."
+    ::= { ftthlab 1 }
+
+onuEntry OBJECT-TYPE
+    SYNTAX OnuEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "One configured ONU."
+    INDEX { onuRowIndex }
+    ::= { onuTable 1 }
+
+OnuEntry ::= SEQUENCE {
+    onuId DisplayString,
+    onuSerial DisplayString,
+    onuOpticalState INTEGER,
+    onuRxCentiDbm Integer32,
+    onuPon Integer32,
+    onuVlan Integer32,
+    onuRxOctets Counter64,
+    onuTxOctets Counter64,
+    onuIpv4 DisplayString,
+    onuUsername DisplayString,
+    onuRowIndex Integer32
+}
+
+onuId OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Canonical ONU ID in the lab document."
+    ::= { onuEntry 1 }
+
+onuSerial OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Configured GPON serial."
+    ::= { onuEntry 2 }
+
+onuOpticalState OBJECT-TYPE
+    SYNTAX INTEGER { online(1), los(2), unregistered(3), offline(4) }
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Modelled optical state, separate from PPP connectivity."
+    ::= { onuEntry 3 }
+
+onuRxCentiDbm OBJECT-TYPE
+    SYNTAX Integer32
+    UNITS "0.01 dBm"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Calculated optical receive power. -9999 means unavailable."
+    ::= { onuEntry 4 }
+
+onuPon OBJECT-TYPE
+    SYNTAX Integer32 (1..8)
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Owning PON port number."
+    ::= { onuEntry 5 }
+
+onuVlan OBJECT-TYPE
+    SYNTAX Integer32 (1..4094)
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Configured service VLAN on the access bridge."
+    ::= { onuEntry 6 }
+
+onuRxOctets OBJECT-TYPE
+    SYNTAX Counter64
+    UNITS "octets"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Actual kernel PPP receive octets, from subscriber perspective.
+         Resets when the PPP interface is recreated."
+    ::= { onuEntry 7 }
+
+onuTxOctets OBJECT-TYPE
+    SYNTAX Counter64
+    UNITS "octets"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Actual kernel PPP transmit octets, from subscriber perspective.
+         Resets when the PPP interface is recreated."
+    ::= { onuEntry 8 }
+
+onuIpv4 OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Observed assigned IPv4; an empty string before connection."
+    ::= { onuEntry 9 }
+
+onuUsername OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Configured PPPoE username."
+    ::= { onuEntry 10 }
+
+onuRowIndex OBJECT-TYPE
+    SYNTAX Integer32 (1..500)
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "One-based position after sorting ONU IDs within this OLT. This
+         index can change when a stopped topology is edited."
+    ::= { onuEntry 11 }
+
+labTrapData OBJECT IDENTIFIER ::= { ftthlab 2 }
+
+changedOnuId OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION "Canonical ONU ID whose modelled state changed."
+    ::= { labTrapData 1 }
+
+changedOnuState OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION "New modelled state text."
+    ::= { labTrapData 2 }
+
+onuStateChange NOTIFICATION-TYPE
+    OBJECTS { changedOnuId, changedOnuState }
+    STATUS current
+    DESCRIPTION
+        "Lab reference notification, not a vendor LOS/dying-gasp fixture.
+         Sent only while the parent OLT is available."
+    ::= { labNotifications 1 }
+
+END

@@ -1,0 +1,11 @@
+/.data/
+/bin/
+/artifacts/
+/web/node_modules/
+/web/.svelte-kit/
+/web/dist/
+/internal/site/dist/*
+!/internal/site/dist/.gitkeep
+*.test
+coverage.out
+__pycache__/

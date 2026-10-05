@@ -1,0 +1,8 @@
+.git
+.data
+bin
+artifacts
+web/node_modules
+internal/site/dist
+**/*.env
+**/*.key

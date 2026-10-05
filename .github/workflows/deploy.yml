@@ -1,0 +1,80 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberlab-production
+  cancel-in-progress: false
+
+jobs:
+  verification:
+    uses: ./.github/workflows/checks.yml
+
+  deploy:
+    needs: verification
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package verified source and runtime secrets
+        env:
+          FIBERLAB_ENV: ${{ secrets.FIBERLAB_ENV }}
+        run: |
+          set -euo pipefail
+          umask 077
+          release="$(mktemp -d)"
+          git archive "$GITHUB_SHA" | tar -x -C "$release"
+          test -n "$FIBERLAB_ENV"
+          printf '%s\n' "$FIBERLAB_ENV" > "$release/production.env"
+          tar -czf "$RUNNER_TEMP/release.tar.gz" -C "$release" .
+          rm -rf "$release"
+      - name: Install Cloudflare SSH transport
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl --fail --silent --show-error --location https://github.com/cloudflare/cloudflared/releases/download/2026.9.1/cloudflared-linux-amd64 -o "$RUNNER_TEMP/bin/cloudflared"
+          printf '%s  %s\n' '03f1f25d1cc93b9ad6c60569d44060bc4f17ed97075760ed8cfca4b12dcd68cc' "$RUNNER_TEMP/bin/cloudflared" | sha256sum --check --status
+          chmod +x "$RUNNER_TEMP/bin/cloudflared"
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Configure restricted SSH key and pinned host
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/fiberlab_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Upload and activate tested release
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$DEPLOY_USER" =~ ^[a-zA-Z0-9_-]+$ ]]
+          checksum="$(sha256sum "$RUNNER_TEMP/release.tar.gz" | cut -d ' ' -f1)"
+          ssh -i ~/.ssh/fiberlab_deploy -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=30 -o 'ProxyCommand=cloudflared access ssh --hostname %h' \
+            "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA $checksum" < "$RUNNER_TEMP/release.tar.gz"
+      - name: Verify public production route
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          FIBERLAB_ENV: ${{ secrets.FIBERLAB_ENV }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$FIBERLAB_ENV" > "$RUNNER_TEMP/fiberlab.env"
+          set -a
+          source "$RUNNER_TEMP/fiberlab.env"
+          set +a
+          curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors --user "$WEB_USERNAME:$WEB_PASSWORD" "$APP_URL/api/v1/health" | jq -e .ok
+          curl --fail --silent --show-error --user "$WEB_USERNAME:$WEB_PASSWORD" "$APP_URL/api/v1/system" | jq -e .helperOnline
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$APP_URL/")" = 401
+      - name: Remove deployment credentials
+        if: always()
+        run: rm -f ~/.ssh/fiberlab_deploy "$RUNNER_TEMP/fiberlab.env" "$RUNNER_TEMP/release.tar.gz"

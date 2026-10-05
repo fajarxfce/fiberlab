@@ -1,0 +1,41 @@
+name: Verify Fiberlab
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build, test and check
+        run: |
+          make build
+          make test
+          make check
+      - name: Browser regression tests
+        working-directory: web
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:ui
+      - name: Validate deployment configuration
+        env:
+          DEPLOY_ROOT: /tmp/fiberlab
+          FIBERLAB_IMAGE: fiberlab:check
+          KVM_GID: 991
+        run: |
+          bash -n deploy/*.sh
+          shellcheck deploy/*.sh
+          docker compose -f deploy/compose.yml config --quiet

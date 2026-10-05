@@ -4,7 +4,7 @@
 
 The mini PC uses native Docker Engine at `/var/run/docker.sock`, alongside the existing Docker Desktop installation. Native Linux containers are necessary for `/dev/kvm`, TAP devices, PPP, and network namespaces. The deployment scripts select that socket explicitly.
 
-The Compose project has three services: an unprivileged Go application on loopback port 18787, a privileged network helper, and an authenticated nginx gateway on loopback port 18080. nginx validates browser origins, supports SSE and terminal WebSockets, and blocks the private control endpoint.
+The Compose project has four services: a privileged network helper, an unprivileged Go application, a TCP proxy, and an authenticated nginx gateway on host loopback port 18080. The helper, application, and proxy share an isolated Docker network namespace so lab SSH and RADIUS listeners do not collide with host services. The proxy publishes the loopback application at host loopback port 18787. nginx validates browser origins, supports SSE and terminal WebSockets, and blocks the private control endpoint.
 
 GitHub environment `production` owns all deployment credentials:
 
@@ -18,6 +18,18 @@ GitHub environment `production` owns all deployment credentials:
 `FIBERLAB_ENV` contains `WEB_USERNAME`, `WEB_PASSWORD`, `CONTROL_KEY`, `LAB_ROUTER_PASSWORD`, `LAB_OLT_PASSWORD`, `LAB_SNMP_COMMUNITY`, `LAB_RADIUS_SECRET`, `LAB_PPPOE_PASSWORD`, and `LAB_ACS_PASSWORD`. Use shell-quoted values when necessary. No credential values belong in the repository.
 
 Environment variables `DEPLOY_HOST`, `DEPLOY_USER`, and `APP_URL` identify the target and public route. Initial provisioning downloads the official CHR 7.20.8 image and configures the default lab using those secrets. The `.provisioned` marker prevents later deployments from overwriting lab edits. New labs and credentials edited in the UI remain application data. ACS starts disabled.
+
+To verify real sessions, run the harness inside the helper network namespace so it can inspect CHR directly:
+
+```sh
+mkdir -p ~/fiberlab/verification
+docker --host unix:///var/run/docker.sock run --rm \
+  --network container:fiberlab-netd-1 --user "$(id -u):$(id -g)" \
+  -v "$HOME/fiberlab/current/scripts:/scripts:ro" \
+  -v "$HOME/fiberlab/verification:/output" python:3.13-slim \
+  python /scripts/verify_runtime.py --url http://127.0.0.1:18787 \
+  --onus 8 --seconds 60 --faults --output /output
+```
 
 Persistent data lives at `~/fiberlab/shared/data`, with root-managed network runtime at `/var/lib/fiberlab`. Deployment builds before stopping the previous release, backs up stopped application data, and restores the previous release when activation fails. Deploying while a lab is running stops that lab; start it again after deployment.
 

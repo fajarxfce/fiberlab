@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o
 FROM ubuntu:26.04
 ARG KVM_GID=991
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl qemu-system-x86 qemu-utils iproute2 ppp iputils-ping \
+    && apt-get install -y --no-install-recommends ca-certificates curl qemu-system-x86 qemu-utils iproute2 ppp iputils-ping socat \
     && rm -rf /var/lib/apt/lists/* \
     && if id ubuntu >/dev/null 2>&1; then userdel -r ubuntu; fi \
     && groupadd --gid 1000 fiberlab \

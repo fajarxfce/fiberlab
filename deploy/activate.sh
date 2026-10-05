@@ -29,21 +29,21 @@ rollback() {
     local status=$?
     trap - EXIT
     if (( status != 0 )); then
-        "${compose[@]}" stop web app netd || true
+        "${compose[@]}" stop || true
         if [[ -n "$previous" ]]; then
             ln -s "$previous" "$root/current.rollback"
             mv -Tf "$root/current.rollback" "$root/current"
             if [[ "$backup_ready" == true ]]; then
                 tar -xzf "$root/backups/before-$commit.tar.gz" -C "$root/shared"
             fi
-            bash "$root/current/deploy/compose.sh" up -d --force-recreate --wait --wait-timeout 180
+            bash "$root/current/deploy/compose.sh" up -d --force-recreate --remove-orphans --wait --wait-timeout 180
         fi
     fi
     exit "$status"
 }
 trap rollback EXIT
 if [[ -n "$previous" ]]; then
-    bash "$root/current/deploy/compose.sh" stop web app netd
+    bash "$root/current/deploy/compose.sh" stop
     tar -czf "$root/backups/before-$commit.tar.gz" -C "$root/shared" data .env htpasswd deployed-sha
     backup_ready=true
 fi
@@ -54,7 +54,7 @@ chmod 644 "$root/shared/htpasswd"
 printf "%s" "$CONTROL_KEY" > "$root/shared/data/control.key"
 ln -s "releases/$commit" "$root/current.next"
 mv -Tf "$root/current.next" "$root/current"
-"${compose[@]}" up -d --force-recreate --wait --wait-timeout 180
+"${compose[@]}" up -d --force-recreate --remove-orphans --wait --wait-timeout 180
 
 bash "$release/deploy/provision.sh"
 curl --fail --silent --show-error --user "$WEB_USERNAME:$WEB_PASSWORD" -H "Host: sim.karuhundeveloper.com" http://127.0.0.1:18080/api/v1/health

@@ -28,7 +28,7 @@ lab="$(curl --fail --silent --show-error "$api/labs" | jq -er '.[0].id')"
 curl --fail --silent --show-error "$api/labs/$lab" | jq --arg image "chr-$version" '
     .name = "Mini PC · Fiberlab" | .imageId = $image |
     .radius.secret = env.LAB_RADIUS_SECRET |
-    .nodes |= map(
+    .nodes |= map(.config.community = env.LAB_SNMP_COMMUNITY |
         if .kind == "router" then .config.username = "admin" | .config.password = env.LAB_ROUTER_PASSWORD
         elif .kind == "olt" then .config.username = "admin" | .config.password = env.LAB_OLT_PASSWORD | .config.community = env.LAB_SNMP_COMMUNITY
         else . end) |

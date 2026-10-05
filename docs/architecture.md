@@ -99,7 +99,19 @@ revisions and removes them when their lab is deleted. Declarative connection
 settings are part of the topology export, while provisioned values stay local
 to the lab identity. See [ACS](acs.md) for the supported parameter subset.
 
-The app keeps .data as owner-only data. The root helper uses a private journal
+Repository builds resolve owner-only `.data` relative to the project containing
+the executable; launching `bin/ftthlab` from a file manager uses the same database
+as the terminal. Standalone installations use the user's XDG data directory.
+An explicit `--data-dir` overrides both. Launching without arguments opens the
+browser and reuses an existing instance only when its data directory matches.
+
+The desktop can start the helper through Polkit. The application launches its
+own `netd` subcommand with a fixed UID, data directory and socket; HTTP callers
+cannot provide commands or arguments. The operating system handles the password
+prompt, and concurrent start requests share the same pending launch. The helper
+survives a web-app restart; it must be started again after a host reboot.
+
+The root helper uses a private journal
 and a locked directory under /var/lib/fiberlab/UID. Root-owned ancestors allow
 QEMU to traverse but not modify helper state. Each VM gets its own user-owned
 disk/socket directory; privileged logs stay outside it.

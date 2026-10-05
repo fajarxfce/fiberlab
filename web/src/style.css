@@ -2524,6 +2524,30 @@ select:disabled {
   padding: 16px;
   margin: 10px 0;
 }
+.connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 11px;
+}
+.connection-actions > span {
+  flex: 1;
+}
+.connection-warning,
+.helper-error {
+  padding: 12px;
+  border: 1px solid #d1a551;
+  border-radius: 6px;
+  background: #fff8e8;
+  color: #82551c;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.connection-warning p {
+  margin: 0 0 8px;
+}
 .connection-heading {
   display: flex;
   align-items: center;

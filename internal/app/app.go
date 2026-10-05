@@ -49,6 +49,7 @@ type App struct {
 	watchers     map[chan struct{}]bool
 	controlToken string
 	imageJob     ImageJob
+	helperLaunch helperLaunch
 	ctx          context.Context
 	cancel       context.CancelFunc
 	pollDone     chan struct{}
@@ -203,6 +204,7 @@ func (a *App) Handler() http.Handler {
 		write(w, 200, map[string]any{"ok": true, "name": "Fiberlab", "version": "0.1.0"})
 	})
 	mux.HandleFunc("GET /api/v1/system", a.system)
+	mux.HandleFunc("POST /api/v1/system/helper/start", a.startHelper)
 	mux.HandleFunc("GET /api/v1/capabilities", func(w http.ResponseWriter, r *http.Request) { write(w, 200, protocol.Capabilities()) })
 	mux.HandleFunc("GET /api/v1/labs", func(w http.ResponseWriter, r *http.Request) {
 		labs, err := a.Store.List(r.Context())
@@ -512,7 +514,7 @@ func (a *App) system(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(exe, "/go-build") || strings.Contains(exe, "/go-tool") {
 		command = fmt.Sprintf("sudo ./bin/ftthlab netd --data-dir %s --uid %d", shellQuote(a.Dir), os.Getuid())
 	}
-	write(w, 200, map[string]any{"helperOnline": err == nil, "checks": checks, "helperCommand": command, "dataDir": a.Dir, "socket": a.Helper.Socket, "stack": []string{"Go", "Svelte 5", "SQLite"}, "network": map[string]string{"management": "10.203.0.0/24", "testOrigin": "198.18.0.1:8080", "subscribers": "172.30.0.0/22"}})
+	write(w, 200, map[string]any{"helperOnline": err == nil, "helperLaunch": a.helperLaunchStatus(err == nil), "checks": checks, "helperCommand": command, "dataDir": a.Dir, "socket": a.Helper.Socket, "stack": []string{"Go", "Svelte 5", "SQLite"}, "network": map[string]string{"management": "10.203.0.0/24", "testOrigin": "198.18.0.1:8080", "subscribers": "172.30.0.0/22"}})
 }
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 func (a *App) startLab(w http.ResponseWriter, r *http.Request) {

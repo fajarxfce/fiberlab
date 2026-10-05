@@ -186,6 +186,7 @@ func bootstrapSerial(ctx context.Context, socket, username, password, address st
 				":if ([:len [/ip address find where comment=\"fiberlab-mgmt\"]] = 0) do={ /ip address add address=" + address + "/24 interface=ether1 comment=\"fiberlab-mgmt\" } else={ /ip address set [/ip address find where comment=\"fiberlab-mgmt\"] address=" + address + "/24 interface=ether1 }\r" +
 				"/ip service set api disabled=no\r" +
 				"/ip service set ssh disabled=no\r" +
+				"/ip service set winbox disabled=no port=8291\r" +
 				":put \"FIBERLAB-BOOT-READY\"\r"
 		}
 		if send != "" {

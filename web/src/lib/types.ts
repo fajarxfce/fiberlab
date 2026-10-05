@@ -181,6 +181,7 @@ export type Check = {
 };
 export type System = {
   helperOnline: boolean;
+  helperLaunch?: { available: boolean; starting: boolean; error?: string };
   checks: Check[];
   helperCommand: string;
   dataDir: string;

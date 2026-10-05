@@ -31,6 +31,7 @@ func main() {
 	}
 }
 func run(args []string) error {
+	desktop := len(args) == 0
 	command := "serve"
 	if len(args) > 0 {
 		command = args[0]
@@ -41,10 +42,11 @@ func run(args []string) error {
 	switch command {
 	case "serve":
 		f := flag.NewFlagSet("serve", flag.ContinueOnError)
-		dir := f.String("data-dir", ".data", "Local persistent application directory")
+		dir := f.String("data-dir", dataDirDefault(), "Local persistent application directory")
 		address := f.String("listen", "127.0.0.1:8787", "Loopback HTTP address")
 		socket := f.String("socket", "", "Network helper socket (defaults to DATA/netd.sock)")
 		dev := f.Bool("dev", false, "Allow the local Vite development origin")
+		open := f.Bool("open", desktop, "Open the browser (enabled when launched without arguments)")
 		if err := f.Parse(args); err != nil {
 			return err
 		}
@@ -59,6 +61,15 @@ func run(args []string) error {
 		if *socket == "" {
 			*socket = filepath.Join(abs, "netd.sock")
 		}
+		listener, err := net.Listen("tcp", *address)
+		if err != nil {
+			if *open && sameInstance(*address, abs) {
+				openBrowser(*address)
+				return nil
+			}
+			return fmt.Errorf("listen on %s: %w; another instance may already be running", *address, err)
+		}
+		defer listener.Close()
 		application, err := app.New(abs, *address, *socket, *dev)
 		if err != nil {
 			return err
@@ -72,7 +83,10 @@ func run(args []string) error {
 			server.Shutdown(shutdown)
 		}()
 		fmt.Printf("Fiberlab · http://%s\nData: %s\nNetwork helper: %s\n", *address, abs, *socket)
-		err = server.ListenAndServe()
+		if *open {
+			openBrowser(*address)
+		}
+		err = server.Serve(listener)
 		if err == http.ErrServerClosed {
 			return nil
 		}
@@ -97,7 +111,7 @@ func run(args []string) error {
 		return nil
 	case "netd":
 		f := flag.NewFlagSet("netd", flag.ContinueOnError)
-		dir := f.String("data-dir", ".data", "Application data directory (contains CHR images)")
+		dir := f.String("data-dir", dataDirDefault(), "Application data directory (contains CHR images)")
 		socket := f.String("socket", "", "Socket accessible only to the application owner")
 		uid := f.Int("uid", defaultOwner(), "UID of the unprivileged application owner")
 		runtimeDir := f.String("runtime-dir", "", "Root-managed runtime directory")
@@ -152,7 +166,7 @@ func run(args []string) error {
 		}
 		action := args[0]
 		f := flag.NewFlagSet("images "+action, flag.ContinueOnError)
-		dir := f.String("data-dir", ".data", "Application data directory")
+		dir := f.String("data-dir", dataDirDefault(), "Application data directory")
 		version := f.String("version", images.DefaultVersion, "Exact CHR version")
 		path := f.String("path", "", "Path to official raw CHR image for import")
 		if err := f.Parse(args[1:]); err != nil {

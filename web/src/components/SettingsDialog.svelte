@@ -50,6 +50,7 @@
   let copied = $state(false);
   let saving = $state(false);
   let fetchBusy = $state(false);
+  let helperBusy = $state(false);
   let saved = $state(false);
   async function refresh() {
     try {
@@ -75,6 +76,17 @@
       onerror((e as Error).message);
     } finally {
       fetchBusy = false;
+    }
+  }
+  async function startHelper() {
+    helperBusy = true;
+    try {
+      await api('/system/helper/start', 'POST', {});
+      await refresh();
+    } catch (e) {
+      onerror((e as Error).message);
+    } finally {
+      helperBusy = false;
     }
   }
   async function save() {
@@ -150,10 +162,37 @@
               class="status-pill"
               class:status-online={system?.helperOnline}
               class:status-ready={!system?.helperOnline}
-              ><i></i>{system?.helperOnline ? 'Connected' : 'Not running'}</span
+              ><i></i>{system?.helperOnline
+                ? 'Connected'
+                : system?.helperLaunch?.starting
+                  ? 'Starting…'
+                  : 'Not running'}</span
             >
           </div>
-          {#if system && !system.helperOnline}<div class="command-box">
+          {#if system && !system.helperOnline}
+            {#if system.helperLaunch?.available}
+              <button
+                class="button primary"
+                disabled={helperBusy || system.helperLaunch.starting}
+                onclick={startHelper}
+                >{#if helperBusy || system.helperLaunch.starting}<LoaderCircle
+                    class="spin"
+                    size={15}
+                  />Starting helper…{:else}<ShieldCheck size={15} />Start
+                  network helper{/if}</button
+              >
+              <p class="field-hint">
+                Enter your Linux account password in the system dialog. Once
+                connected, close settings and choose Run lab.
+              </p>
+            {/if}
+            {#if system.helperLaunch?.error}<p
+                class="helper-error"
+                role="alert"
+              >
+                {system.helperLaunch.error}
+              </p>{/if}
+            <div class="command-box">
               <code>{system.helperCommand}</code><button
                 class="icon-button"
                 title="Copy helper command"
@@ -168,9 +207,13 @@
               >
             </div>
             <p class="field-hint">
-              Run this in a local terminal. It creates only the lab's named
-              bridges, TAP devices, and customer namespaces.
+              {system.helperLaunch?.available ? 'Or run' : 'Run'} this command in
+              a local terminal. The helper must be started again after restarting
+              the laptop.
             </p>{/if}
+          <p class="field-hint">
+            Workspace data: <code>{system?.dataDir || 'Loading…'}</code>
+          </p>
           <div class="dependency-grid">
             {#each system?.checks || [] as check}<div
                 class="dependency"

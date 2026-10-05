@@ -191,3 +191,31 @@ Profil, batas protokol, jalur host untuk trafik CWMP, serta cara menjalankan
 fixture/harness tersedia di [panduan ACS](acs.md). Hasil ini membuktikan dua
 agent CWMP pada jaringan nyata dan batas concurrency melalui unit test;
 pengukuran 500 PPP selama 30 menit di atas dilakukan dengan ACS nonaktif.
+
+## Regresi desktop dan Winbox — 5 Oktober 2026
+
+Perbaikan startup diuji dari folder `bin`: aplikasi membuka `.data` di root
+proyek, dan pemanggilan kedua memakai instance yang sama. Database yang
+sebelumnya tercipta di `bin/.data` tetap tersimpan. Lab utama mempertahankan
+15 perangkat dan dua MikroTik dengan kredensial yang sama.
+
+- Race tests pada `cmd/ftthlab`, `internal/app`, dan `internal/engine` lulus.
+  Cakupan baru mencakup resolusi direktori, penolakan perintah dari browser,
+  satu proses helper untuk permintaan bersamaan, serta retry setelah dialog
+  autentikasi dibatalkan.
+- `go vet ./...` dan Svelte check lulus, tanpa error atau warning.
+- Seluruh 13 skenario Playwright lulus dalam 27,8 detik, termasuk penyalinan
+  alamat/password Winbox, dialog helper, dan perpindahan ke lab yang aktif.
+- Tes CHR asli lulus dalam 39,91 detik. Password tersimpan tetap diterima
+  setelah reboot; Winbox aktif kembali di TCP 8291 setelah sengaja dinonaktifkan
+  dan dipindahkan portnya di dalam VM tes.
+- **WinBox 4.4 asli berhasil login ke RouterOS 7.20.8**, menggunakan password
+  router utama yang tersimpan. Tes GUI memakai Xvfb dan VM sementara dengan
+  QEMU user networking serta port forwarding loopback; ini tidak memerlukan
+  helper root atau mengubah disk/router pengguna.
+
+Ringkasan lokal: `artifacts/desktop-winbox-verification.json`. Bukti sesi Winbox:
+`artifacts/winbox-authenticated.png`. VM dan desktop tes sudah dihentikan.
+Binary setelah perbaikan berukuran 14.618.889 byte. Untuk mengakses alamat
+management `10.203.0.x` pada lab host, helper tetap harus diotorisasi lewat
+dialog Linux atau terminal, lalu lab dijalankan.

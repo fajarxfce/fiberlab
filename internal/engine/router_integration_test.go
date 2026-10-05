@@ -38,6 +38,12 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
+	winboxListener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	winboxPort := winboxListener.Addr().(*net.TCPAddr).Port
+	winboxListener.Close()
 	lab := model.Preset(8)
 	lab.Radius.InterimSeconds = 10
 	freeUDPPort := func() int {
@@ -69,7 +75,7 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		backend := fmt.Sprintf("user,id=n%d", i)
 		if i == 0 {
-			backend += fmt.Sprintf(",hostfwd=tcp:127.0.0.1:%d-:8728,hostfwd=udp:127.0.0.1:%d-:3799", port, disconnectPort)
+			backend += fmt.Sprintf(",hostfwd=tcp:127.0.0.1:%d-:8728,hostfwd=tcp:127.0.0.1:%d-:8291,hostfwd=udp:127.0.0.1:%d-:3799", port, winboxPort, disconnectPort)
 		}
 		if i == 2 || i == 3 {
 			backend = fmt.Sprintf("hubport,id=n%d,hubid=1", i)
@@ -108,6 +114,25 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 		t.Fatalf("genuine CHR resource query: %+v %v", res, err)
 	}
 	t.Logf("Verified genuine RouterOS %s (%s)", res.Re[0].Map["version"], res.Re[0].Map["board-name"])
+	winboxID := ""
+	verifyWinbox := func(c *routeros.Client) {
+		t.Helper()
+		services, err := c.RunArgsContext(ctx, []string{"/ip/service/print", "?name=winbox"})
+		if err != nil || len(services.Re) != 1 || services.Re[0].Map["disabled"] != "false" || services.Re[0].Map["port"] != "8291" {
+			t.Fatalf("Winbox service: %+v %v", services, err)
+		}
+		winboxID = services.Re[0].Map[".id"]
+		groups, err := c.RunArgsContext(ctx, []string{"/user/group/print", "?name=full"})
+		if err != nil || len(groups.Re) != 1 || !strings.Contains(groups.Re[0].Map["policy"], "winbox") {
+			t.Fatalf("admin group cannot use Winbox: %+v %v", groups, err)
+		}
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", winboxPort), 3*time.Second)
+		if err != nil {
+			t.Fatalf("Winbox TCP endpoint: %v", err)
+		}
+		conn.Close()
+	}
+	verifyWinbox(client)
 	servers, err := client.RunArgsContext(ctx, []string{"/interface/pppoe-server/server/print", "?comment=fiberlab"})
 	if err != nil || len(servers.Re) != 4*len(node.Config.ServiceVLANs) {
 		t.Fatalf("PPPoE servers after reconcile: %+v %v", servers, err)
@@ -120,6 +145,9 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A persisted overlay must accept the saved password after a guest reboot.
+	if _, err = client.RunArgsContext(ctx, []string{"/ip/service/set", "=.id=" + winboxID, "=disabled=yes", "=port=18300"}); err != nil {
+		t.Fatal(err)
+	}
 	client.Close()
 	if err = QMP(ctx, qmp, "system_reset"); err != nil {
 		t.Fatal(err)
@@ -129,6 +157,13 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 	if err = BootstrapSerial(rebootCtx, serial, node.Config.Username, node.Config.Password, "10.0.2.15"); err != nil {
 		t.Fatalf("reprovision persistent overlay: %v", err)
 	}
+	reconnected, err := DialRouter(rebootCtx, fmt.Sprintf("127.0.0.1:%d", port), node.Config.Username, node.Config.Password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reconnected.Close()
+	verifyWinbox(reconnected)
+	t.Log("Verified saved router login and Winbox TCP 8291 before and after reboot")
 }
 
 // The CHR's second access NIC acts as a real PPPoE client, wired back through

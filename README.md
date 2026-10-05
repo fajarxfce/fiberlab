@@ -40,7 +40,19 @@ Bisa mengimpor raw image resmi:
 ./bin/ftthlab images import --version 7.20.8 --path /path/chr-7.20.8.img
 ~~~
 
-Di terminal kedua, dari direktori proyek yang sama:
+Binary `bin/ftthlab` juga bisa dibuka dengan **klik dua kali**. Browser terbuka
+otomatis dan data tetap memakai `.data` di root proyek, meskipun file manager
+menjalankan binary dari folder `bin`. Klik berikutnya membuka instance yang sama.
+Untuk binary yang dipasang di luar proyek, default data adalah
+`$XDG_DATA_HOME/fiberlab` atau `~/.local/share/fiberlab`. Opsi `--data-dir`
+mengganti lokasi tersebut; path relatif pada opsi ini mengikuti direktori terminal.
+
+Buka **Runtime settings → Start network helper**, lalu isi password akun Linux
+di dialog sistem. Tombol ini memakai Polkit (`pkexec`) dan agent desktop yang
+tersedia pada sesi login. Setelah status Connected, pilih image dan **Run lab**.
+Helper perlu dinyalakan kembali setelah laptop reboot.
+
+Alternatif tanpa Polkit, di terminal kedua dari direktori proyek yang sama:
 
 ~~~sh
 sudo ./bin/ftthlab netd --data-dir "$PWD/.data" --uid "$(id -u)"
@@ -72,7 +84,7 @@ Panel **Integration** menampilkan alamat, port, community, dan kredensial lab.
 
 | Endpoint default | Layanan |
 | --- | --- |
-| 10.203.0.10 | CHR: API TCP 8728, SSH TCP 22, SNMP UDP 161 |
+| 10.203.0.10 | CHR: Winbox TCP 8291, API TCP 8728, SSH TCP 22, SNMP UDP 161 |
 | 10.203.0.64 | OLT reference: SNMP UDP 161, SSH TCP 22, Telnet TCP 23 |
 | 10.203.0.1 | RADIUS built-in: UDP 1812/1813 |
 | 198.18.0.1:8080 | HTTP origin untuk tes dari namespace pelanggan |
@@ -80,6 +92,18 @@ Panel **Integration** menampilkan alamat, port, community, dan kredensial lab.
 Alamat router dan OLT berikutnya dialokasikan secara berurutan. Pool IPv4
 pelanggan adalah 172.30.0.0/22. Semua endpoint aktif setelah runtime berjalan.
 Gunakan IP management di atas dari aplikasi yang berjalan pada host yang sama.
+
+Untuk **Winbox**, jalankan lab, buka **Integration**, lalu salin **Winbox address**
+dan **Copy password** dari kartu MikroTik yang dipilih. Contoh Connect To adalah
+`10.203.0.10:8291` dengan login `admin`. Password dibuat per router dan tersimpan
+bersama lab; gunakan password kartu tersebut, bukan password Linux atau password
+kosong. Akses dengan IP menghindari ketergantungan pada neighbor/MAC discovery.
+
+Lab berbeda memakai rentang IP management yang sama dengan kredensial berbeda.
+Jika lab lain sedang aktif, Integration menampilkan namanya dan tombol
+**Switch to active lab**. Membuka editor saja belum menyalakan VM MikroTik.
+Data `bin/.data` yang mungkin tercipta oleh binary versi lama tetap tersimpan;
+buka dengan `--data-dir bin/.data` bila perlu mengekspor lab dari lokasi tersebut.
 
 Untuk billing dengan RADIUS sendiri, pilih **Your RADIUS server** sebelum Run,
 isi shared secret dan port, lalu daftarkan IP CHR sebagai NAS pada server tersebut.

@@ -107,6 +107,7 @@
       services: Record<string, { port: number; community?: string }>;
       profile: string;
     }[];
+    activeLab?: { id: string; name: string; phase: string } | null;
     radius: Radius;
     note: string;
   } | null>(null);
@@ -272,6 +273,11 @@
     events = log;
     fittedViewport = null;
     accept(next);
+    try {
+      localStorage.setItem('fiberlab.selectedLab', next.id);
+    } catch {
+      /* The workspace still works when browser storage is disabled. */
+    }
     subscribe(id);
   }
   function subscribe(id: string) {
@@ -779,7 +785,15 @@
         labs = result;
         system = await api<System>('/system');
         if (labs[0]) {
-          await load(labs[0].id);
+          let remembered = '';
+          try {
+            remembered = localStorage.getItem('fiberlab.selectedLab') || '';
+          } catch {
+            /* Use the newest lab when browser storage is disabled. */
+          }
+          await load(
+            labs.find((entry) => entry.id === remembered)?.id || labs[0].id
+          );
           const available = await api<ImageStatus>('/images');
           if (lab && !lab.imageId && available.images[0])
             await saveImage(available.images[0].id);
@@ -793,6 +807,8 @@
     const systemTimer = setInterval(async () => {
       try {
         system = await api<System>('/system');
+        if (integration && lab)
+          connections = await api(`/labs/${lab.id}/connections`);
       } catch {
         /* Connection indicator is refreshed on the next successful request. */
       }
@@ -1334,6 +1350,32 @@
             }}>{reveal ? 'Hide credentials' : 'Show credentials'}</button
           >
         </div>
+        {#if connections?.activeLab && connections.activeLab.id !== lab.id}
+          <div class="connection-warning" role="status">
+            <p>
+              <strong>{connections.activeLab.name}</strong> is the active lab. Management
+              IPs are shared between labs, but their passwords differ.
+            </p>
+            <button
+              class="button small-button"
+              onclick={async () => {
+                const activeID = connections?.activeLab?.id;
+                if (!activeID) return;
+                try {
+                  labs = await api<Lab[]>('/labs');
+                  await load(activeID);
+                  await integrate();
+                } catch (e) {
+                  problem((e as Error).message);
+                }
+              }}>Switch to active lab</button
+            >
+          </div>
+        {/if}
+        <p class="field-hint">
+          Use the IP address and credentials for this lab. The router password
+          is generated per device; it is different from your Linux password.
+        </p>
         {#each connections?.devices || [] as device}<div
             class="connection-card"
           >
@@ -1363,6 +1405,33 @@
               <div class="connection-field">
                 PASSWORD<code>{reveal ? device.password : '••••••••••••'}</code>
               </div>
+            </div>
+            <div class="connection-actions">
+              {#if device.kind === 'router'}
+                <span
+                  >Winbox <code
+                    >{device.ip}:{device.services.winbox?.port || 8291}</code
+                  ></span
+                >
+                <button
+                  class="button small-button"
+                  aria-label={`Copy Winbox address for ${device.name}`}
+                  onclick={async () => {
+                    await copy(
+                      `${device.ip}:${device.services.winbox?.port || 8291}`
+                    );
+                    toast('Winbox address copied');
+                  }}><Copy size={13} />Copy address</button
+                >
+              {/if}
+              <button
+                class="button small-button"
+                aria-label={`Copy password for ${device.name}`}
+                onclick={async () => {
+                  await copy(device.password);
+                  toast('Device password copied');
+                }}><Copy size={13} />Copy password</button
+              >
             </div>
             <div class="service-chips">
               {#each Object.entries(device.services) as [name, service]}<span

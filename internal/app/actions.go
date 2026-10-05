@@ -229,6 +229,7 @@ func (a *App) connections(w http.ResponseWriter, r *http.Request) {
 		}
 		services := map[string]any{"ssh": map[string]any{"port": 22, "transport": "tcp"}, "snmp": map[string]any{"port": 161, "transport": "udp", "version": "2c", "community": n.Config.Community}}
 		if n.Kind == "router" {
+			services["winbox"] = map[string]any{"port": 8291, "transport": "tcp"}
 			services["routerosApi"] = map[string]any{"port": 8728, "transport": "tcp"}
 			services["disconnect"] = map[string]any{"port": 3799, "transport": "udp"}
 		} else {
@@ -236,7 +237,17 @@ func (a *App) connections(w http.ResponseWriter, r *http.Request) {
 		}
 		devices = append(devices, map[string]any{"id": n.ID, "name": n.Label, "kind": n.Kind, "ip": ips[n.ID], "username": n.Config.Username, "password": n.Config.Password, "services": services, "profile": n.Config.Model})
 	}
-	write(w, 200, map[string]any{"devices": devices, "radius": l.Radius, "acs": l.ACS, "cwmp": a.ACS.Snapshot(l.ID), "testOrigin": "http://198.18.0.1:8080", "subscriberPool": "172.30.0.0/22", "note": "Use device endpoints from this Linux host while the lab is running. ONU CWMP connects from the host network to the configured ACS. HSGQ proprietary OIDs/commands remain unsupported until verified; the reference CLI uses the lab namespace."})
+	a.viewMu.Lock()
+	activeID, phase := a.view.LabID, a.view.Phase
+	a.viewMu.Unlock()
+	var activeLab map[string]string
+	if activeID != "" && phase != "stopped" && phase != "error" {
+		activeLab = map[string]string{"id": activeID, "phase": phase, "name": activeID}
+		if active, err := a.Store.Get(r.Context(), activeID); err == nil {
+			activeLab["name"] = active.Name
+		}
+	}
+	write(w, 200, map[string]any{"devices": devices, "activeLab": activeLab, "radius": l.Radius, "acs": l.ACS, "cwmp": a.ACS.Snapshot(l.ID), "testOrigin": "http://198.18.0.1:8080", "subscriberPool": "172.30.0.0/22", "note": "Use device endpoints from this Linux host while this lab is running. Each lab has different router credentials even when management IPs match. ONU CWMP connects from the host network to the configured ACS. HSGQ proprietary OIDs/commands remain unsupported until verified; the reference CLI uses the lab namespace."})
 }
 func (a *App) exec(w http.ResponseWriter, r *http.Request) {
 	l, err := a.Store.Get(r.Context(), r.PathValue("id"))

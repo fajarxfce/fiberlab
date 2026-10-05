@@ -8,7 +8,7 @@ replacement for native device protocols.
 
 | Surface | Implementation | Limits |
 | --- | --- | --- |
-| CHR API TCP 8728 / SSH TCP 22 / SNMP UDP 161 | Genuine RouterOS 7.20.8 | CHR license applies; six provisioned NICs |
+| CHR Winbox TCP 8291 / API TCP 8728 / SSH TCP 22 / SNMP UDP 161 | Genuine RouterOS 7.20.8 | CHR license applies; six provisioned NICs |
 | OLT SNMPv2c UDP 161 | system, a subset of IF-MIB/IF-X-MIB, FTTHLAB-MIB | Read only; no SNMPv3 or HSGQ proprietary MIB |
 | OLT SSH TCP 22 / Telnet TCP 23 | Password auth, bounded interactive/exec CLI | Explicit lab commands; no vendor firmware grammar |
 | ONU telemetry | Modelled optical state + actual PPP observations | No OMCI, ONU firmware or independent management SNMP |
@@ -144,7 +144,7 @@ The server rejects other Host values and cross-origin browser access.
 | POST /labs/import | Import full document as a new lab with revision 1 |
 | POST /labs/ID/start, /stop | Start or stop actual network runtime |
 | GET /labs/ID/runtime | Phase, progress, actual sessions, optical model, metrics and per-ONU ACS status |
-| GET /labs/ID/connections | Native IPs, ports and credentials |
+| GET /labs/ID/connections | Native IPs, ports, credentials and the currently active lab identity |
 | GET /labs/ID/events?after=SEQ | Up to 200 ordered events after a cursor |
 | GET /labs/ID/stream | SSE "state": runtime, revision and incremental events |
 | POST /labs/ID/actions | Supported canonical control action |
@@ -153,6 +153,14 @@ The server rejects other Host values and cross-origin browser access.
 | POST /labs/ID/exec | ONU allowlisted command: {"nodeId":"onu-0001","command":"http"} |
 | POST /labs/ID/capture | PCAP: {"linkId":"drop-0001","seconds":10} |
 | GET /labs/ID/terminal?node=ID | WebSocket bridge to native SSH for router/OLT |
+| POST /system/helper/start | Empty JSON object; start the fixed netd command through desktop Polkit authorization; HTTP 202 while pending |
+
+`GET /system` includes `helperOnline`, `dataDir`, `helperCommand`, and
+`helperLaunch` (`available`, `starting`, optional `error`). System authentication
+uses the Linux account password. Router credentials in `/connections` belong to
+the selected lab; different labs can reuse the same management addresses.
+CHR bootstrap enables Winbox on TCP 8291 at each start. Connect by management IP
+and use the password shown or copied from the router's Integration card.
 
 Action example:
 

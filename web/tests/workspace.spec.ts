@@ -225,14 +225,35 @@ test('billing suspension preserves optical service', async ({
 test('native connection details and honest runtime setup', async ({
   page,
   request,
+  context,
 }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.getByRole('button', { name: 'Integration', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('10.203.0.10');
   await expect(dialog).toContainText('10.203.0.64');
   await expect(dialog).toContainText('8728');
+  await expect(dialog).toContainText('10.203.0.10:8291');
   await expect(dialog).toContainText('Endpoints available when lab runs');
   const lab = await current(page, request);
+  await dialog
+    .getByRole('button', {
+      name: 'Copy Winbox address for MikroTik · core',
+      exact: true,
+    })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe('10.203.0.10:8291');
+  await dialog
+    .getByRole('button', {
+      name: 'Copy password for MikroTik · core',
+      exact: true,
+    })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(lab.nodes[0].config.password);
   await expect(
     dialog.getByText(lab.nodes[0].config.password, { exact: true })
   ).toHaveCount(0);
@@ -247,6 +268,106 @@ test('native connection details and honest runtime setup', async ({
   await page.keyboard.press('Escape');
   await page.keyboard.press('/');
   await expect(page.getByLabel('Search devices')).toBeFocused();
+});
+
+test('helper authorization can be cancelled and retried without a terminal', async ({
+  page,
+  request,
+}) => {
+  const original = await (await request.get('/api/v1/system')).json();
+  let phase: 'idle' | 'starting' | 'cancelled' | 'connected' = 'idle';
+  let starts = 0;
+  await page.route('**/api/v1/system', async (route) => {
+    await route.fulfill({
+      json: {
+        ...original,
+        helperOnline: phase === 'connected',
+        helperLaunch: {
+          available: true,
+          starting: phase === 'starting',
+          error:
+            phase === 'cancelled'
+              ? 'System authorization was cancelled. Start the helper again when ready.'
+              : '',
+        },
+      },
+    });
+  });
+  await page.route('**/api/v1/system/helper/start', async (route) => {
+    starts++;
+    phase = starts === 1 ? 'starting' : 'connected';
+    await route.fulfill({ status: 202, json: { starting: true } });
+  });
+  await page.getByTitle('Runtime settings', { exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog
+    .getByRole('button', { name: 'Start network helper', exact: true })
+    .click();
+  await expect(
+    dialog.getByRole('button', { name: 'Starting helper…', exact: true })
+  ).toBeDisabled();
+  await expect(dialog).toContainText(
+    'Enter your Linux account password in the system dialog.'
+  );
+  phase = 'cancelled';
+  await expect(dialog.getByRole('alert')).toContainText(
+    'authorization was cancelled'
+  );
+  await dialog
+    .getByRole('button', { name: 'Start network helper', exact: true })
+    .click();
+  await expect(dialog.locator('.status-pill')).toHaveText('Connected');
+  expect(starts).toBe(2);
+  expect((await runtime(page, request)).phase).toBe('stopped');
+});
+
+test('connection details warn and switch when another lab owns the router IP', async ({
+  page,
+  request,
+}) => {
+  const selected = await current(page, request);
+  const active = await (
+    await request.post('/api/v1/labs', {
+      data: { name: 'Active network', count: 8 },
+    })
+  ).json();
+  const details = await (
+    await request.get(`/api/v1/labs/${selected.id}/connections`)
+  ).json();
+  await page.route(
+    `**/api/v1/labs/${selected.id}/connections`,
+    async (route) => {
+      await route.fulfill({
+        json: {
+          ...details,
+          activeLab: { id: active.id, name: active.name, phase: 'running' },
+        },
+      });
+    }
+  );
+  await page.getByRole('button', { name: 'Integration', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.locator('.connection-warning')).toContainText(
+    'Active network'
+  );
+  await expect(dialog.locator('.connection-warning')).toContainText(
+    'passwords differ'
+  );
+  await dialog
+    .getByRole('button', { name: 'Switch to active lab', exact: true })
+    .click();
+  await expect(page.getByLabel('Select lab')).toHaveValue(active.id);
+  await dialog
+    .getByRole('button', { name: 'Show credentials', exact: true })
+    .click();
+  await expect(
+    dialog.getByText(active.nodes[0].config.password, { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByText(selected.nodes[0].config.password, { exact: true })
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByLabel('Select lab')).toHaveValue(active.id);
 });
 
 test('invalid RADIUS settings cannot report saved', async ({

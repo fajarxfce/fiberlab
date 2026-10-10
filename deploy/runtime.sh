@@ -6,7 +6,7 @@ umask 077
 # restarting containers with network_mode: service:netd can retain a stale
 # namespace even though their individual health checks continue to pass.
 children=()
-# shellcheck disable=SC2329 # Invoked by the EXIT trap, including startup failures.
+# shellcheck disable=SC2317,SC2329 # Invoked by the EXIT trap, including startup failures.
 cleanup() {
     trap '' TERM INT
     for child in "${children[@]}"; do

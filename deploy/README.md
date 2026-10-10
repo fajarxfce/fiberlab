@@ -1,12 +1,14 @@
 # Production deployment
 
-`main` runs `.github/workflows/deploy.yml`: backend race tests, frontend build and type checks, browser tests, deployment validation, then SSH deployment through Cloudflare Access. The existing tunnel sends `sim.karuhundeveloper.com` to `http://localhost:18080`.
+The existing Cloudflare tunnel sends `sim.karuhundeveloper.com` to `http://localhost:18080`. Releases can be installed over the owner's SSH connection. Optional GitHub Actions deployment runs backend race tests, frontend build and type checks, browser tests, and deployment validation before activating a release through Cloudflare SSH.
 
 The mini PC uses native Docker Engine at `/var/run/docker.sock`, alongside the existing Docker Desktop installation. Native Linux containers are necessary for `/dev/kvm`, TAP devices, PPP, and network namespaces. The deployment scripts select that socket explicitly.
 
-The Compose project has four services: a privileged network helper, an unprivileged Go application, a TCP proxy, and an authenticated nginx gateway on host loopback port 18080. The helper, application, and proxy share an isolated Docker network namespace so lab SSH and RADIUS listeners do not collide with host services. The proxy publishes the loopback application at host loopback port 18787. nginx validates browser origins, supports SSE and terminal WebSockets, and blocks the private control endpoint.
+The Compose project has two services: the network runtime and an authenticated nginx gateway on host loopback port 18080. The runtime starts the root network helper, the Go application as UID 1000 with no capabilities, and a TCP proxy as UID 1000. These processes share one container so they keep the same network namespace across Docker restarts. If any process exits, the supervisor stops the others and Docker restarts the runtime together. Stopping the container gives the helper time to clean up the lab.
 
-GitHub environment `production` owns all deployment credentials:
+The runtime's isolated network prevents lab SSH and RADIUS listeners from colliding with host services. The TCP proxy publishes the loopback application at host loopback port 18787. nginx validates browser origins, supports SSE and terminal WebSockets, and blocks the private control endpoint.
+
+To enable automatic deployment, configure these secrets in GitHub environment `production`, then set the repository variable `DEPLOY_ENABLED` to `true`. Without this variable, pushes run verification only; the installed application continues running.
 
 | Secret | Purpose |
 | --- | --- |
@@ -24,7 +26,7 @@ To verify real sessions, run the harness inside the helper network namespace so 
 ```sh
 mkdir -p ~/fiberlab/verification
 docker --host unix:///var/run/docker.sock run --rm \
-  --network container:fiberlab-netd-1 --user "$(id -u):$(id -g)" \
+  --network container:fiberlab-runtime-1 --user "$(id -u):$(id -g)" \
   -v "$HOME/fiberlab/current/scripts:/scripts:ro" \
   -v "$HOME/fiberlab/verification:/output" python:3.13-slim \
   python /scripts/verify_runtime.py --url http://127.0.0.1:18787 \
@@ -40,5 +42,7 @@ bash ~/fiberlab/current/deploy/compose.sh ps
 bash ~/fiberlab/current/deploy/compose.sh logs --tail 100
 bash ~/fiberlab/current/deploy/compose.sh restart
 ```
+
+The services start automatically with Docker after a mini PC reboot. Restarting the runtime stops any running lab; click **Run** to start its devices again. A reboot is not needed after a normal deployment.
 
 To change the web login, update `FIBERLAB_ENV` and run a deployment with a new commit. Runtime environment files are installed with mode 600. The trusted SSH receiver is `~/fiberlab/bin/ssh-deploy.sh`; update that file through the owner SSH session when changing the receiver protocol.

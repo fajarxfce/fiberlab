@@ -57,6 +57,8 @@ mv -Tf "$root/current.next" "$root/current"
 "${compose[@]}" up -d --force-recreate --remove-orphans --wait --wait-timeout 180
 
 bash "$release/deploy/provision.sh"
-curl --fail --silent --show-error --user "$WEB_USERNAME:$WEB_PASSWORD" -H "Host: sim.karuhundeveloper.com" http://127.0.0.1:18080/api/v1/health
+curl --fail --silent --show-error --config <(printf 'header = "Authorization: Basic %s"\n' \
+    "$(printf '%s:%s' "$WEB_USERNAME" "$WEB_PASSWORD" | base64 -w0)") \
+    -H "Host: sim.karuhundeveloper.com" http://127.0.0.1:18080/api/v1/health
 printf "%s\n" "$commit" > "$root/shared/deployed-sha"
 printf "Activated Fiberlab release %s\n" "$commit"

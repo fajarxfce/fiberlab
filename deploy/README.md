@@ -8,6 +8,18 @@ The Compose project has two services: the network runtime and an authenticated n
 
 The runtime's isolated network prevents lab SSH and RADIUS listeners from colliding with host services. The TCP proxy publishes the loopback application at host loopback port 18787. nginx validates browser origins, supports SSE and terminal WebSockets, and blocks the private control endpoint.
 
+The Docker network uses `172.18.0.0/16`, with the runtime fixed at `172.18.0.2`. On this mini PC that range belongs to Fiberlab. When deploying elsewhere, check for a conflicting network before using this configuration.
+
+Install the host management route once after activating the first release:
+
+```sh
+sudo bash ~/fiberlab/current/deploy/install-host-route.sh
+```
+
+The `fiberlab-route.service` unit restores `10.203.0.0/24 via 172.18.0.2` when Docker starts. The runtime translates incoming management traffic so CHR can return packets to the host. Both the route and translation survive normal container restarts; the unit also restores the route after a host reboot. If the Docker network is manually removed and recreated, restart `fiberlab-route.service`.
+
+With the lab running, the mini PC and an FTTH application running on the host can use `10.203.0.10` for MikroTik (WinBox 8291, API 8728, SSH 22) and `10.203.0.64` for OLT (SSH 22, SNMP 161). Device credentials are shown in **Connections**. These private device IPs are separate from the Cloudflare web domain; a laptop needs its own SSH forwarding or VPN route to reach them.
+
 To enable automatic deployment, configure these secrets in GitHub environment `production`, then set the repository variable `DEPLOY_ENABLED` to `true`. Without this variable, pushes run verification only; the installed application continues running.
 
 | Secret | Purpose |

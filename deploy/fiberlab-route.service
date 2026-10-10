@@ -1,0 +1,15 @@
+[Unit]
+Description=Fiberlab device access from the mini PC
+Requires=docker.service
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fiberlab-host-route
+ExecStop=/usr/local/sbin/fiberlab-host-route --remove
+RemainAfterExit=yes
+TimeoutStartSec=90
+
+[Install]
+WantedBy=docker.service

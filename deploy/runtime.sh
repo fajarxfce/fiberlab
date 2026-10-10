@@ -19,6 +19,13 @@ cleanup() {
 trap 'cleanup' EXIT
 trap 'exit 0' TERM INT
 
+# The host routes management traffic through this container. CHR has no route
+# back to the Docker subnet, so use the lab gateway as the source for replies.
+management_nat=(POSTROUTING '!' -s 10.203.0.0/24 -d 10.203.0.0/24 -o flab-mgmt -j MASQUERADE)
+if ! iptables -t nat -C "${management_nat[@]}" 2>/dev/null; then
+    iptables -t nat -A "${management_nat[@]}"
+fi
+
 wait_ready() {
     local child="$1"
     shift

@@ -5,6 +5,11 @@ services:
     image: ${FIBERLAB_IMAGE:?Image is required}
     user: "0:0"
     privileged: true
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      default:
+        ipv4_address: 172.18.0.2
     ports:
       - "127.0.0.1:18787:18788"
     restart: unless-stopped
@@ -38,3 +43,10 @@ services:
     depends_on:
       runtime:
         condition: service_healthy
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1

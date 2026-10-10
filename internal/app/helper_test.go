@@ -13,7 +13,34 @@ import (
 	"time"
 
 	"ftthlab/internal/model"
+	"ftthlab/internal/protocol"
 )
+
+func TestConnectionsExportBothHSGQIdentitiesForOfflineONUs(t *testing.T) {
+	a, h, l := fixture(t)
+	for i := range l.Nodes {
+		if l.Nodes[i].ID == "onu-0001" {
+			l.Nodes[i].Config.Powered = false
+			l.Nodes[i].Config.MAC = ""
+		}
+	}
+	if _, err := a.Store.Save(context.Background(), l, l.Revision); err != nil {
+		t.Fatal(err)
+	}
+	w := request(t, h, "GET", "/api/v1/labs/"+l.ID+"/connections", nil)
+	var response struct{ ONUs []protocol.HSGQONU }
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.ONUs) != len(l.SortedNodes("onu")) {
+		t.Fatal("connection export dropped offline inventory")
+	}
+	first := response.ONUs[0]
+	n, _ := l.Node("onu-0001")
+	if first.ID != n.ID || first.Index != 16777473 || first.GPONIndex != 16777472 || first.Serial != "HSGQ00000001" || first.MAC != model.ONUMAC(n) || first.FTTHIdentity != strings.ToUpper(strings.ReplaceAll(first.MAC, ":", "")) {
+		t.Fatalf("incorrect FTTH/GPON mapping: %+v", first)
+	}
+}
 
 func TestDesktopHelperLaunchIsFixedDeduplicatedAndRetryable(t *testing.T) {
 	dir := t.TempDir()

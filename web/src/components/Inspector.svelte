@@ -165,6 +165,12 @@
                 <dt>Serial number</dt>
                 <dd class="mono">{node.config.serial}</dd>
               </div>
+              {#if node.config.mac}<div>
+                  <dt>MAC / EPON identity</dt>
+                  <dd class="mono">
+                    {node.config.mac.replaceAll(':', '').toUpperCase()}
+                  </dd>
+                </div>{/if}
               <div>
                 <dt>OLT / PON</dt>
                 <dd>
@@ -312,9 +318,9 @@
               <div>
                 <strong>Explicit compatibility</strong>
                 <p>
-                  Standard SNMP plus the lab reference MIB. The CLI uses <code
-                    >lab</code
-                  > commands. Unverified HSGQ vendor commands return unsupported.
+                  HSGQ GPON and EPON SNMP report ONU identity, status and
+                  optical power. Choose HSGQ in your FTTH app and use the MAC
+                  identity from Integration. The CLI uses <code>lab</code> commands.
                 </p>
               </div>
             </div>{/if}
@@ -787,7 +793,7 @@
         <dl>
           <div>
             <dt>Access network</dt>
-            <dd>GPON · HSGQ reference</dd>
+            <dd>GPON · HSGQ SNMP compatibility</dd>
           </div>
           <div>
             <dt>Subscriber sessions</dt>

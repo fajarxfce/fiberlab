@@ -9,7 +9,7 @@ replacement for native device protocols.
 | Surface | Implementation | Limits |
 | --- | --- | --- |
 | CHR Winbox TCP 8291 / API TCP 8728 / SSH TCP 22 / SNMP UDP 161 | Genuine RouterOS 7.20.8 | CHR license applies; six provisioned NICs |
-| OLT SNMPv2c UDP 161 | system, a subset of IF-MIB/IF-X-MIB, FTTHLAB-MIB | Read only; no SNMPv3 or HSGQ proprietary MIB |
+| OLT SNMPv2c UDP 161 | system, IF-MIB/IF-X-MIB subset, FTTHLAB-MIB, HSGQ GPON/EPON ONU telemetry | Read only; no SNMPv3, vendor provisioning or full firmware emulation |
 | OLT SSH TCP 22 / Telnet TCP 23 | Password auth, bounded interactive/exec CLI | Explicit lab commands; no vendor firmware grammar |
 | ONU telemetry | Modelled optical state + actual PPP observations | No OMCI, ONU firmware or independent management SNMP |
 | ONU TR-069 / CWMP | HTTP/SOAP CWMP 1.0, TR-098 subset, Inform, parameter RPCs, Reboot/FactoryReset | Host management transport; simulated Wi-Fi; no vendor firmware or TR-181 |
@@ -17,11 +17,11 @@ replacement for native device protocols.
 | Dynamic authorization | Native Disconnect-Request / ACK on UDP 3799 | Rate changes force reauthentication; no CoA attribute updates |
 | Ethernet PCAP | Actual AF_PACKET capture | Shared optical links merge descendants, not GPON physical frames |
 
-The machine-readable matrix is GET /api/v1/capabilities. HSGQ support is a
-reference profile, not a claim of hardware/firmware equivalence. Proprietary
-OIDs return noSuchObject/endOfMibView; unknown CLI commands return UNSUPPORTED
-and SSH exec exit status 1. A future vendor profile needs sanitized MIBs,
-command transcripts and representative alarms from the exact hardware/firmware.
+The machine-readable matrix is GET /api/v1/capabilities. The [HSGQ profile](hsgq.md)
+exposes a G01ID GPON inventory/optical subset plus an E04I EPON compatibility
+table for the FTTH HSGQ adapter. Other vendor OIDs return
+noSuchObject/endOfMibView; unknown CLI commands return UNSUPPORTED and SSH exec
+exit status 1. This is not a claim of complete hardware/firmware equivalence.
 
 ## OLT SNMP profile
 
@@ -35,9 +35,12 @@ snmpbulkwalk -v2c -c lab-read 10.203.0.64 .1.3.6.1.4.1.32473.42.1.1
 ~~~
 
 GET, GETNEXT and GETBULK are supported. GETBULK is capped at 32 repetitions and
-256 variables. SET returns notWritable. Responses use numerical OID ordering.
+256 variables, truncated at whole repetition rows for SNMP4J TableUtils.
+SET returns notWritable. Responses use numerical OID ordering.
 OLT power/admin down stops responses. sysObjectID identifies the experimental
-lab profile, never an invented HSGQ enterprise identifier.
+lab profile. The separately documented HSGQ ONU columns use the observed vendor
+namespace `.1.3.6.1.4.1.50224`; [HSGQ integration](hsgq.md) explains the two
+identity formats, zero/one-based indices, optical values and supported faults.
 
 Standard scalar system OIDs .1.3.6.1.2.1.1.1–7.0 are available. ifNumber is 9:
 ifIndex 1 is the uplink; ifIndex 2–9 are pon1–pon8. ifTable exposes ifIndex,
@@ -144,7 +147,7 @@ The server rejects other Host values and cross-origin browser access.
 | POST /labs/import | Import full document as a new lab with revision 1 |
 | POST /labs/ID/start, /stop | Start or stop actual network runtime |
 | GET /labs/ID/runtime | Phase, progress, actual sessions, optical model, metrics and per-ONU ACS status |
-| GET /labs/ID/connections | Native IPs, ports, credentials and the currently active lab identity |
+| GET /labs/ID/connections | Native IPs, ports, credentials, active lab and GPON/EPON ONU identities |
 | GET /labs/ID/events?after=SEQ | Up to 200 ordered events after a cursor |
 | GET /labs/ID/stream | SSE "state": runtime, revision and incremental events |
 | POST /labs/ID/actions | Supported canonical control action |

@@ -85,7 +85,7 @@ Panel **Integration** menampilkan alamat, port, community, dan kredensial lab.
 | Endpoint default | Layanan |
 | --- | --- |
 | 10.203.0.10 | CHR: Winbox TCP 8291, API TCP 8728, SSH TCP 22, SNMP UDP 161 |
-| 10.203.0.64 | OLT reference: SNMP UDP 161, SSH TCP 22, Telnet TCP 23 |
+| 10.203.0.64 | OLT HSGQ: SNMP UDP 161, SSH TCP 22, Telnet TCP 23 |
 | 10.203.0.1 | RADIUS built-in: UDP 1812/1813 |
 | 198.18.0.1:8080 | HTTP origin untuk tes dari namespace pelanggan |
 
@@ -113,12 +113,16 @@ melalui management bridge. Helper tidak mengaktifkan forwarding/NAT host untuk
 mencapai server di mesin lain. Policy dan accounting pada mode external
 dikelola aplikasi billing/server tersebut.
 
-**Profil HSGQ-G08R dibatasi secara eksplisit.** SNMP system/IF-MIB/IF-X-MIB
-tersedia, ditambah FTTHLAB-MIB di enterprise eksperimental 32473.42.
-CLI menyediakan perintah "lab ..."; OID/perintah vendor HSGQ yang belum memiliki
-fixture mengembalikan unsupported. Adapter HSGQ produksi perlu fixture MIB/CLI
-model dan versi firmware yang cocok sebelum kompatibilitasnya bisa dijamin.
-Lihat [protokol dan API](docs/protocols.md).
+**OLT mendukung telemetry SNMP HSGQ GPON dan EPON.** Adapter HSGQ aplikasi FTTH
+bisa membaca ONU, PON, online/offline dan RX/TX. Pilih vendor **HSGQ**, SNMP v2c,
+port **161**, lalu salin **FTTH identity (MAC)** ONU dari **Integration** untuk
+identitas pelanggan. Serial GPON/ACS ditampilkan terpisah.
+
+Profil memakai subset G01ID yang dibaca dari perangkat asli dan tabel EPON
+kompatibilitas E04I; topology tetap 8 PON virtual. SNMP system/IF-MIB/IF-X-MIB
+dan FTTHLAB-MIB tersedia. CLI menyediakan perintah `lab ...`; provisioning dan
+OID vendor lain belum didukung. Lihat [integrasi HSGQ](docs/hsgq.md) serta
+[protokol dan API](docs/protocols.md).
 
 ## Menghubungkan ONU ke ACS / GenieACS
 

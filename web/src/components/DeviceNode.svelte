@@ -36,9 +36,9 @@
       /></span
     >
     <div class="device-node-copy">
-      <span class="device-category"
-        >{kindNames[device.kind]}{device.kind === 'olt' ? ' · G08R' : ''}</span
-      ><strong title={device.label}>{device.label}</strong>
+      <span class="device-category">{kindNames[device.kind]}</span><strong
+        title={device.label}>{device.label}</strong
+      >
     </div>
     <span
       class="device-status-dot status-{state}"

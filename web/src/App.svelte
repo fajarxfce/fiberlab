@@ -107,6 +107,15 @@
       services: Record<string, { port: number; community?: string }>;
       profile: string;
     }[];
+    onus?: {
+      id: string;
+      name: string;
+      oltId: string;
+      pon: number;
+      serial: string;
+      mac: string;
+      ftthIdentity: string;
+    }[];
     activeLab?: { id: string; name: string; phase: string } | null;
     radius: Radius;
     note: string;
@@ -1444,6 +1453,64 @@
                 >{/each}
             </div>
           </div>{/each}
+        {#if connections?.onus?.length}
+          <div class="connection-card">
+            <div class="connection-heading">
+              <span class="palette-symbol kind-onu"
+                ><DeviceGlyph kind="onu" size={23} /></span
+              >
+              <div>
+                <strong>ONU identities for FTTH</strong><span
+                  >Vendor HSGQ · SNMP v2c · UDP 161</span
+                >
+              </div>
+              <button
+                class="icon-button"
+                title="Copy ONU identities JSON"
+                onclick={async () => {
+                  await copy(JSON.stringify(connections?.onus, null, 2));
+                  toast('ONU identities copied');
+                }}><Copy size={15} /></button
+              >
+            </div>
+            <p class="field-hint">
+              The FTTH HSGQ adapter uses the MAC identity as the customer serial
+              number. GPON and ACS use the GPON serial.
+            </p>
+            <div class="onu-identity-table">
+              <table>
+                <thead
+                  ><tr
+                    ><th>ONU / PON</th><th>FTTH identity (MAC)</th><th
+                      >GPON / ACS serial</th
+                    ></tr
+                  ></thead
+                >
+                <tbody
+                  >{#each connections.onus as onu}<tr>
+                      <td
+                        >{onu.name}<small>{onu.oltId} · PON{onu.pon}</small></td
+                      >
+                      <td
+                        ><button
+                          class="button small-button"
+                          aria-label={`Copy FTTH identity for ${onu.name}`}
+                          onclick={async () => {
+                            await copy(onu.ftthIdentity);
+                            toast('FTTH identity copied');
+                          }}
+                          ><code>{onu.ftthIdentity}</code><Copy
+                            size={13}
+                          /></button
+                        ></td
+                      >
+                      <td><code>{onu.serial}</code></td>
+                    </tr>{/each}</tbody
+                >
+              </table>
+            </div>
+          </div>
+        {/if}
         <div class="connection-card">
           <div class="connection-heading">
             <span class="palette-symbol kind-onu"

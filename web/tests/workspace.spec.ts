@@ -237,6 +237,20 @@ test('native connection details and honest runtime setup', async ({
   await expect(dialog).toContainText('10.203.0.10:8291');
   await expect(dialog).toContainText('Endpoints available when lab runs');
   const lab = await current(page, request);
+  await expect(dialog.locator('.onu-identity-table tbody tr')).toHaveCount(8);
+  const onu = lab.nodes.find((node: any) => node.id === 'onu-0001');
+  await dialog
+    .getByRole('button', {
+      name: `Copy FTTH identity for ${onu.label}`,
+      exact: true,
+    })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(onu.config.mac.replaceAll(':', '').toUpperCase());
+  await expect(dialog.locator('.onu-identity-table')).toContainText(
+    onu.config.serial
+  );
   await dialog
     .getByRole('button', {
       name: 'Copy Winbox address for MikroTik · core',

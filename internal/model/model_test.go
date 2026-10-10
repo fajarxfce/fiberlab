@@ -2,9 +2,52 @@ package model
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 )
+
+func TestMissingONUMACHasStableUniqueUnicastIdentity(t *testing.T) {
+	l := Preset(8)
+	seen := map[string]bool{}
+	for i := range l.Nodes {
+		if l.Nodes[i].Kind != "onu" {
+			continue
+		}
+		l.Nodes[i].Config.MAC = ""
+		n := l.Nodes[i]
+		first := ONUMAC(n)
+		n.Label = "renamed"
+		n.Config.Powered, n.Config.Registered = false, false
+		if ONUMAC(n) != first {
+			t.Fatal("label/power/authorization changed MAC identity")
+		}
+		mac, err := net.ParseMAC(first)
+		if err != nil || len(mac) != 6 || mac[0]&3 != 2 || seen[first] {
+			t.Fatalf("invalid/duplicate derived identity: %s", first)
+		}
+		seen[first] = true
+	}
+	if err := Validate(l); err != nil {
+		t.Fatal(err)
+	}
+	// An explicit address must not collide with another ONU's derived address.
+	var first string
+	for i, n := range l.Nodes {
+		if n.Kind != "onu" {
+			continue
+		}
+		if first == "" {
+			first = ONUMAC(n)
+		} else {
+			l.Nodes[i].Config.MAC = first
+			break
+		}
+	}
+	if err := Validate(l); err == nil {
+		t.Fatal("explicit/derived MAC collision accepted")
+	}
+}
 
 func TestPresetsAndManagementIdentity(t *testing.T) {
 	for _, count := range []int{1, 8, 32, 100, 500} {

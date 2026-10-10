@@ -9,6 +9,7 @@ import (
 
 	"ftthlab/internal/engine"
 	"ftthlab/internal/model"
+	"ftthlab/internal/protocol"
 )
 
 func (a *App) action(w http.ResponseWriter, r *http.Request) {
@@ -223,19 +224,24 @@ func (a *App) connections(w http.ResponseWriter, r *http.Request) {
 	}
 	ips := model.ManagementIPs(l)
 	devices := []map[string]any{}
+	onus := []protocol.HSGQONU{}
+	view := model.Preview(l)
 	for _, n := range l.Nodes {
 		if n.Kind != "router" && n.Kind != "olt" {
 			continue
 		}
 		services := map[string]any{"ssh": map[string]any{"port": 22, "transport": "tcp"}, "snmp": map[string]any{"port": 161, "transport": "udp", "version": "2c", "community": n.Config.Community}}
+		profile := n.Config.Model
 		if n.Kind == "router" {
 			services["winbox"] = map[string]any{"port": 8291, "transport": "tcp"}
 			services["routerosApi"] = map[string]any{"port": 8728, "transport": "tcp"}
 			services["disconnect"] = map[string]any{"port": 3799, "transport": "udp"}
 		} else {
 			services["telnet"] = map[string]any{"port": 23, "transport": "tcp"}
+			profile = protocol.HSGQProfile
+			onus = append(onus, protocol.HSGQONUs(l, view, n.ID)...)
 		}
-		devices = append(devices, map[string]any{"id": n.ID, "name": n.Label, "kind": n.Kind, "ip": ips[n.ID], "username": n.Config.Username, "password": n.Config.Password, "services": services, "profile": n.Config.Model})
+		devices = append(devices, map[string]any{"id": n.ID, "name": n.Label, "kind": n.Kind, "ip": ips[n.ID], "username": n.Config.Username, "password": n.Config.Password, "services": services, "profile": profile})
 	}
 	a.viewMu.Lock()
 	activeID, phase := a.view.LabID, a.view.Phase
@@ -247,7 +253,7 @@ func (a *App) connections(w http.ResponseWriter, r *http.Request) {
 			activeLab["name"] = active.Name
 		}
 	}
-	write(w, 200, map[string]any{"devices": devices, "activeLab": activeLab, "radius": l.Radius, "acs": l.ACS, "cwmp": a.ACS.Snapshot(l.ID), "testOrigin": "http://198.18.0.1:8080", "subscriberPool": "172.30.0.0/22", "note": "Use device endpoints from this Linux host while this lab is running. Each lab has different router credentials even when management IPs match. ONU CWMP connects from the host network to the configured ACS. HSGQ proprietary OIDs/commands remain unsupported until verified; the reference CLI uses the lab namespace."})
+	write(w, 200, map[string]any{"devices": devices, "onus": onus, "activeLab": activeLab, "radius": l.Radius, "acs": l.ACS, "cwmp": a.ACS.Snapshot(l.ID), "testOrigin": "http://198.18.0.1:8080", "subscriberPool": "172.30.0.0/22", "note": "Use device endpoints from this Linux host while this lab is running. Each lab has different router credentials even when management IPs match. HSGQ SNMP exposes GPON serials and an EPON compatibility table; the FTTH HSGQ adapter identifies ONUs by the MAC-based FTTH identity below. ONU CWMP connects from the host network to the configured ACS. The OLT CLI uses lab commands; vendor provisioning commands are unsupported."})
 }
 func (a *App) exec(w http.ResponseWriter, r *http.Request) {
 	l, err := a.Store.Get(r.Context(), r.PathValue("id"))

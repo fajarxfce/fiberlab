@@ -2524,6 +2524,30 @@ select:disabled {
   padding: 16px;
   margin: 10px 0;
 }
+.onu-identity-table {
+  max-height: 280px;
+  overflow: auto;
+  margin-top: 12px;
+}
+.onu-identity-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+.onu-identity-table th,
+.onu-identity-table td {
+  padding: 8px;
+  white-space: nowrap;
+}
+.onu-identity-table th {
+  font-size: 11px;
+}
+.onu-identity-table td small {
+  display: block;
+  opacity: 0.65;
+  margin-top: 3px;
+}
 .connection-actions {
   display: flex;
   flex-wrap: wrap;

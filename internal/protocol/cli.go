@@ -32,7 +32,9 @@ func Capabilities() []Capability {
 		{"SNMP v2c system / IF-MIB / IF-X-MIB", "standard", "RFC 3418 / RFC 2863"},
 		{"ONU optical and session telemetry", "lab-reference", "FTTHLAB-MIB, experimental 1.3.6.1.4.1.32473.42"},
 		{"ONU authorization, VLAN, admin, reboot", "lab-reference", "SSH/Telnet lab command namespace and HTTP API"},
-		{"HSGQ proprietary OIDs and command grammar", "unsupported", "Model-specific MIB / CLI fixtures not yet available; no fabricated mappings"},
+		{"HSGQ GPON ONU inventory / optical power", "verified-subset", "G01ID SNMP capture: 50224.3.12, ASCII serial, status, RX/TX; docs/hsgq.md"},
+		{"HSGQ EPON ONU inventory / optical power", "compatibility", "E04I fixtures and FTTH HsgqEponSnmpAdapter: 50224.3.3, MAC identity, status, RX/TX"},
+		{"HSGQ provisioning, other OIDs and vendor CLI", "unsupported", "Read-only ONU telemetry subset; no vendor SET, trap or command grammar fixtures"},
 		{"PAP / CHAP / accounting / Disconnect", "standard", "RFC 2865, 2866, 2869, 5176"},
 		{"ONU ACS / TR-069 CWMP", "standard-reference", "CWMP 1.0 / TR-098 subset; Inform, parameters, HTTP Digest connection request and ONU reboot; host management transport"},
 	}
@@ -217,7 +219,7 @@ func (s *CLIService) serveTelnet(c net.Conn) {
 	s.shell(r)
 }
 func (s *CLIService) shell(r *consoleReader) {
-	io.WriteString(r.w, "\r\nFiberlab / HSGQ-G08R reference model\r\nType help for supported lab commands.\r\n\r\n")
+	io.WriteString(r.w, "\r\nFiberlab / HSGQ SNMP compatibility model\r\nType help for supported lab commands.\r\n\r\n")
 	for {
 		io.WriteString(r.w, "fiberlab# ")
 		input, err := r.readLine(true)
@@ -256,7 +258,7 @@ func (s *CLIService) Execute(line string) (string, bool) {
 	}
 	if len(parts) == 2 && parts[1] == "system" {
 		node, _ := l.Node(s.NodeID)
-		return fmt.Sprintf("Name: %s\r\nModel: HSGQ-G08R reference (not firmware)\r\nPON ports: 8\r\nManagement: %s\r\nSNMP: v2c, system/IF-MIB + explicit FTTHLAB-MIB", node.Label, model.ManagementIPs(l)[s.NodeID]), true
+		return fmt.Sprintf("Name: %s\r\nModel: %s (simulation)\r\nPON ports: 8\r\nManagement: %s\r\nSNMP: v2c, system/IF-MIB, FTTHLAB-MIB, HSGQ GPON/EPON ONU telemetry", node.Label, HSGQProfile, model.ManagementIPs(l)[s.NodeID]), true
 	}
 	if len(parts) == 3 && parts[1] == "onu" && parts[2] == "list" {
 		v := s.Snapshot()

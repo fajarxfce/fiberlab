@@ -17,7 +17,7 @@ import (
 )
 
 // LabOID is an explicitly documented, experimental reference MIB. It is NOT
-// an HSGQ enterprise OID. Vendor OIDs require model/firmware-specific fixtures.
+// an HSGQ enterprise OID. The separate HSGQ subset is defined in hsgq.go.
 const LabOID = ".1.3.6.1.4.1.32473.42"
 
 type SNMPAgent struct {
@@ -112,16 +112,17 @@ func (a *SNMPAgent) Handle(raw []byte) []byte {
 			response.Variables = append(response.Variables, next(v.Name))
 		}
 		last := append([]gosnmp.SnmpPDU(nil), request.Variables[nr:]...)
-		for r := 0; r < min(int(request.MaxRepetitions), 32); r++ {
+		// Truncate at a whole row. SNMP4J TableUtils assigns columns by their
+		// position in each repetition; a partial last row breaks multi-column
+		// inventory/optical joins. Exhausted columns retain EndOfMibView slots.
+		repetitions := min(int(request.MaxRepetitions), 32)
+		if len(last) > 0 {
+			repetitions = min(repetitions, (256-nr)/len(last))
+		}
+		for r := 0; r < repetitions; r++ {
 			for i, v := range last {
 				last[i] = next(v.Name)
 				response.Variables = append(response.Variables, last[i])
-				if len(response.Variables) >= 256 {
-					break
-				}
-			}
-			if len(response.Variables) >= 256 {
-				break
 			}
 		}
 	case gosnmp.SetRequest:
@@ -153,7 +154,7 @@ func BuildMIB(l model.Lab, v model.RuntimeView, oltID string, uptime time.Durati
 		table = append(table, gosnmp.SnmpPDU{Name: oid, Type: typ, Value: value})
 	}
 	node, _ := l.Node(oltID)
-	add(".1.3.6.1.2.1.1.1.0", gosnmp.OctetString, "Fiberlab HSGQ-G08R reference model; optical simulation, not vendor firmware")
+	add(".1.3.6.1.2.1.1.1.0", gosnmp.OctetString, "Fiberlab HSGQ compatibility; G01ID GPON + E04I EPON telemetry; 8 virtual PON ports")
 	add(".1.3.6.1.2.1.1.2.0", gosnmp.ObjectIdentifier, LabOID)
 	add(".1.3.6.1.2.1.1.3.0", gosnmp.TimeTicks, uint32(uptime/(10*time.Millisecond)))
 	add(".1.3.6.1.2.1.1.4.0", gosnmp.OctetString, "local lab operator")
@@ -243,6 +244,7 @@ func BuildMIB(l model.Lab, v model.RuntimeView, oltID string, uptime time.Durati
 		add(base+"9"+suffix, gosnmp.OctetString, s.Address)
 		add(base+"10"+suffix, gosnmp.OctetString, s.Username)
 	}
+	table = append(table, hsgqMIB(l, v, oltID)...)
 	sort.Slice(table, func(i, j int) bool { return OIDLess(table[i].Name, table[j].Name) })
 	return table
 }

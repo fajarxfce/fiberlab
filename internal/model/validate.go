@@ -103,13 +103,11 @@ func Validate(l Lab) error {
 				return fmt.Errorf("%s: serial must be a unique GPON serial, e.g. HSGQ00000001", n.ID)
 			}
 			serials[strings.ToUpper(n.Config.Serial)] = true
-			if n.Config.MAC != "" {
-				mac, err := net.ParseMAC(n.Config.MAC)
-				if err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" || macs[mac.String()] {
-					return fmt.Errorf("%s: use a unique six-byte unicast MAC address", n.ID)
-				}
-				macs[mac.String()] = true
+			mac, err := net.ParseMAC(ONUMAC(n))
+			if err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" || macs[mac.String()] {
+				return fmt.Errorf("%s: use a unique six-byte unicast MAC address", n.ID)
 			}
+			macs[mac.String()] = true
 		}
 		nodes[n.ID] = n
 		counts[n.Kind]++

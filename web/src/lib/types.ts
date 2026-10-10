@@ -309,7 +309,7 @@ export function makeDevice(
     config.username = 'admin';
     config.password = secret();
   }
-  if (kind === 'olt') config.model = 'HSGQ-G08R · reference';
+  if (kind === 'olt') config.model = 'HSGQ · GPON / EPON SNMP';
   if (kind === 'onu') {
     config.serial = `HSGQ${secret().slice(0, 8).toUpperCase()}`;
     config.txDbm = 2.5;

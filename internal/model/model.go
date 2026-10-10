@@ -2,9 +2,11 @@ package model
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math"
+	"net"
 	"regexp"
 	"sort"
 	"strings"
@@ -180,7 +182,7 @@ func DefaultNode(kind, id, label string, x, y float64) Node {
 		c.Username = "admin"
 		c.Password = Secret()
 	case "olt":
-		c.Model = "HSGQ-G08R · reference"
+		c.Model = "HSGQ · GPON / EPON SNMP"
 		c.Username = "admin"
 		c.Password = Secret()
 	case "onu":
@@ -197,6 +199,21 @@ func DefaultNode(kind, id, label string, x, y float64) Node {
 		c.Model = "802.1Q Ethernet bridge"
 	}
 	return Node{ID: id, Kind: kind, Label: label, Position: Position{x, y}, Config: c}
+}
+
+// ONUMAC supplies one identity for the Ethernet client and the HSGQ EPON table.
+// Old/imported topologies may omit MAC; use a stable locally administered
+// unicast address instead of the kernel's random veth address on each run.
+func ONUMAC(n Node) string {
+	if n.Config.MAC != "" {
+		if mac, err := net.ParseMAC(n.Config.MAC); err == nil {
+			return mac.String()
+		}
+		return n.Config.MAC // validation reports invalid explicit addresses
+	}
+	hash := sha256.Sum256([]byte(n.ID + ":" + strings.ToUpper(n.Config.Serial)))
+	mac := net.HardwareAddr{2, hash[0], hash[1], hash[2], hash[3], hash[4]}
+	return mac.String()
 }
 func Ports(n Node) []Port {
 	var p []Port

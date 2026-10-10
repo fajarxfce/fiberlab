@@ -55,13 +55,12 @@ func (e *Engine) startClients(ctx context.Context) error {
 		if _, err := command(ctx, "ip", "-n", ns, "link", "set", peerIF, "name", "eth0"); err != nil {
 			return err
 		}
-		if node.Config.MAC != "" {
-			if _, err := net.ParseMAC(node.Config.MAC); err != nil {
-				return fmt.Errorf("invalid ONU client MAC")
-			}
-			if _, err := command(ctx, "ip", "-n", ns, "link", "set", "eth0", "address", node.Config.MAC); err != nil {
-				return err
-			}
+		mac := model.ONUMAC(node)
+		if _, err := net.ParseMAC(mac); err != nil {
+			return fmt.Errorf("invalid ONU client MAC")
+		}
+		if _, err := command(ctx, "ip", "-n", ns, "link", "set", "eth0", "address", mac); err != nil {
+			return err
 		}
 		if _, err := command(ctx, "ip", "-n", ns, "link", "set", "lo", "up"); err != nil {
 			return err

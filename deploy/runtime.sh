@@ -26,6 +26,23 @@ if ! iptables -t nat -C "${management_nat[@]}" 2>/dev/null; then
     iptables -t nat -A "${management_nat[@]}"
 fi
 
+# The test WAN stays isolated unless this deployment explicitly enables
+# Internet access. Docker provides the next NAT hop from eth0 to the host.
+case "${FIBERLAB_INTERNET:-0}" in
+    1)
+        internet_nat=(POSTROUTING -s 198.18.0.0/24 -o eth0
+            -m comment --comment fiberlab-internet -j MASQUERADE)
+        if ! iptables -w -t nat -C "${internet_nat[@]}" 2>/dev/null; then
+            iptables -w -t nat -A "${internet_nat[@]}"
+        fi
+        ;;
+    0) ;;
+    *)
+        echo "FIBERLAB_INTERNET must be 0 or 1." >&2
+        exit 1
+        ;;
+esac
+
 wait_ready() {
     local child="$1"
     shift

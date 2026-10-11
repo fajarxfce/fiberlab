@@ -20,6 +20,19 @@ The `fiberlab-route.service` unit restores `10.203.0.0/24 via 172.18.0.2` when D
 
 With the lab running, the mini PC and an FTTH application running on the host can use `10.203.0.10` for MikroTik (WinBox 8291, API 8728, SSH 22) and `10.203.0.64` for OLT (SSH 22, SNMP 161). Device credentials are shown in **Connections**. These private device IPs are separate from the Cloudflare web domain; a laptop needs its own SSH forwarding or VPN route to reach them.
 
+Internet access is optional. Set `FIBERLAB_INTERNET=1` in `~/fiberlab/shared/.env` (and in `FIBERLAB_ENV` when using automatic deployment). Recreate the runtime with `bash ~/fiberlab/current/deploy/compose.sh up -d --force-recreate runtime`, then start the lab again. The runtime installs NAT from `198.18.0.0/24` through its Docker uplink on every container start. The default is `0`, which leaves the test WAN without Internet NAT.
+
+For each CHR that should use this uplink, add a default route and DNS servers in its RouterOS terminal. Inspect `/ip route print where dst-address=0.0.0.0/0` and `/ip dns print` first; keep any existing configuration that already provides Internet access. A newly provisioned CHR has neither:
+
+```routeros
+/ip route add dst-address=0.0.0.0/0 gateway=198.18.0.1 comment=fiberlab-internet
+/ip dns set servers=1.1.1.1,8.8.8.8
+/ping 1.1.1.1 count=4
+/tool fetch url=https://example.com/ output=none
+```
+
+These RouterOS settings persist in that router's disk across lab stop/start and runtime recreation. Use the `fiberlab-internet` comment: the exact `fiberlab` comment is reserved for configuration rebuilt by the simulator. New labs or replacement router disks need their own route and DNS configuration. The existing CHR NAT also covers the PPPoE subscriber pool `172.30.0.0/22`; subscribers need a DNS server configured on their client. Changing the deployment flag requires recreating the container; restarting it keeps its existing environment.
+
 To enable automatic deployment, configure these secrets in GitHub environment `production`, then set the repository variable `DEPLOY_ENABLED` to `true`. Without this variable, pushes run verification only; the installed application continues running.
 
 | Secret | Purpose |

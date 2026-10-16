@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,9 @@ import (
 	"ftthlab/internal/model"
 	"ftthlab/internal/protocol"
 	"github.com/go-routeros/routeros/v3"
+	"layeh.com/radius"
+	"layeh.com/radius/rfc2865"
+	"layeh.com/radius/rfc2866"
 )
 
 // Opt in with FIBERLAB_CHR_IMAGE=/absolute/path/to/chr.img. This boots the
@@ -139,6 +143,7 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 		t.Fatalf("PPPoE servers after reconcile: %+v %v", servers, err)
 	}
 	verifyCHRRadius(t, ctx, client, lab, authPort, acctPort, disconnectPort, &blocked, accounting)
+	verifyCHRExternalRadiusPool(t, ctx, client, lab, node)
 	if err = QMP(ctx, qmp, "stop"); err != nil {
 		t.Fatal(err)
 	}
@@ -295,4 +300,127 @@ func verifyCHRRadius(t *testing.T, ctx context.Context, client *routeros.Client,
 	waitAccounting("Stop")
 	run("/interface/pppoe-client/remove", "=.id="+id)
 	t.Log("Real CHR PPPoE PAP/CHAP, Framed-IP, rate queue, Start/Interim/Stop and Disconnect-ACK verified")
+}
+
+// An external server can authenticate successfully without Framed-IP-Address.
+// Exercise actual IPCP and accounting so a missing PPP pool cannot pass merely
+// because the NAS received Access-Accept.
+func verifyCHRExternalRadiusPool(t *testing.T, ctx context.Context, client *routeros.Client, lab model.Lab, node model.Node) {
+	t.Helper()
+	sub := lab.Subscribers[0]
+	accounting := make(chan protocol.Accounting, 16)
+	server := &radius.PacketServer{
+		SecretSource: radius.StaticSecretSource([]byte(lab.Radius.Secret)),
+		Handler: radius.HandlerFunc(func(w radius.ResponseWriter, r *radius.Request) {
+			var response *radius.Packet
+			switch r.Code {
+			case radius.CodeAccessRequest:
+				response = r.Response(radius.CodeAccessReject)
+				if rfc2865.UserName_GetString(r.Packet) == sub.Username && rfc2865.UserPassword_GetString(r.Packet) == sub.Password {
+					response = r.Response(radius.CodeAccessAccept)
+					_ = rfc2865.ServiceType_Set(response, rfc2865.ServiceType_Value_FramedUser)
+					_ = rfc2865.FramedProtocol_Set(response, rfc2865.FramedProtocol_Value_PPP)
+					// Deliberately omit Framed-IP-Address and Framed-Pool.
+				}
+			case radius.CodeAccountingRequest:
+				response = r.Response(radius.CodeAccountingResponse)
+				if rfc2865.UserName_GetString(r.Packet) == sub.Username && rfc2866.AcctStatusType_Get(r.Packet) == rfc2866.AcctStatusType_Value_Start {
+					select {
+					case accounting <- protocol.Accounting{Address: rfc2865.FramedIPAddress_Get(r.Packet).String(), SessionID: rfc2866.AcctSessionID_GetString(r.Packet)}:
+					default:
+					}
+				}
+			default:
+				return
+			}
+			if err := protocol.SignMessageAuthenticator(response); err != nil {
+				t.Errorf("sign external RADIUS response: %v", err)
+				return
+			}
+			if err := w.Write(response); err != nil {
+				t.Errorf("write external RADIUS response: %v", err)
+			}
+		}),
+	}
+	conn, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(conn) }()
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			t.Errorf("stop external RADIUS server: %v", err)
+		}
+		_ = conn.Close()
+		select {
+		case err := <-done:
+			if err != nil && err != radius.ErrServerShutdown {
+				t.Errorf("external RADIUS server: %v", err)
+			}
+		case <-shutdownCtx.Done():
+			t.Error("external RADIUS server did not stop")
+		}
+	}()
+	run := func(args ...string) *routeros.Reply {
+		t.Helper()
+		reply, err := client.RunArgsContext(ctx, args)
+		if err != nil {
+			t.Fatalf("CHR %s: %v", args[0], err)
+		}
+		return reply
+	}
+	run("/ip/pool/add", "=name=operator-pool", "=ranges=10.20.0.2-10.20.0.254")
+	external := lab
+	external.Radius.Mode, external.Radius.Address = "external", "10.0.2.2"
+	external.Radius.AuthPort = conn.LocalAddr().(*net.UDPAddr).Port
+	external.Radius.AccountingPort = external.Radius.AuthPort
+	for pass := 0; pass < 2; pass++ {
+		if err := ConfigureRouter(ctx, client, external, node, 0); err != nil {
+			t.Fatalf("configure external RADIUS pass %d: %v", pass+1, err)
+		}
+	}
+	if rows := run("/ip/pool/print", "?name=operator-pool").Re; len(rows) != 1 || rows[0].Map["ranges"] != "10.20.0.2-10.20.0.254" {
+		t.Fatal("reconciliation changed an operator-created pool")
+	}
+	for _, row := range run("/radius/print", "?comment=fiberlab", "=.proplist=.id").Re {
+		run("/radius/set", "=.id="+row.Map[".id"], "=src-address=10.0.2.15")
+	}
+	for _, row := range run("/interface/pppoe-server/server/print", "?interface=fl-2-v100").Re {
+		run("/interface/pppoe-server/server/set", "=.id="+row.Map[".id"], "=disabled=yes")
+	}
+	run("/interface/pppoe-client/add", "=name=fiberlab-pool-test-client", "=interface=fl-2-v100", "=user="+sub.Username, "=password="+sub.Password, "=allow=pap", "=add-default-route=no", "=use-peer-dns=no", "=disabled=no")
+	defer func() {
+		for _, row := range run("/interface/pppoe-client/print", "?name=fiberlab-pool-test-client").Re {
+			run("/interface/pppoe-client/remove", "=.id="+row.Map[".id"])
+		}
+	}()
+	assigned := ""
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
+		rows := run("/ppp/active/print", "?name="+sub.Username).Re
+		peer := run("/interface/pppoe-client/print", "?name=fiberlab-pool-test-client").Re
+		if len(rows) == 1 && len(peer) == 1 && peer[0].Map["running"] == "true" {
+			assigned = rows[0].Map["address"]
+			if rows[0].Map["radius"] != "true" {
+				t.Fatal("PPP subscriber did not authenticate using external RADIUS")
+			}
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	address, err := netip.ParseAddr(assigned)
+	if err != nil || address.Compare(netip.MustParseAddr("172.30.0.10")) < 0 || address.Compare(netip.MustParseAddr("172.30.3.254")) > 0 {
+		t.Fatalf("external RADIUS without Framed-IP did not establish PPP with a pool address: %q", assigned)
+	}
+	select {
+	case start := <-accounting:
+		if start.Address != assigned || start.SessionID == "" {
+			t.Fatalf("external Accounting-Start did not report the assigned pool address: %+v", start)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("external RADIUS did not receive Accounting-Start for the pool session")
+	}
+	t.Log("Verified external Access-Accept without Framed-IP establishes PPP and reports the pool IP in accounting")
 }

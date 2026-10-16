@@ -130,6 +130,15 @@ RADIUS server that shares its public IP with a VPN endpoint on the WAN path.
 For RADIUS over VPN, select the server's tunnel IP and register the CHR's tunnel
 IP as the NAS on that server; the shared secret must match.
 
+If an external Access-Accept supplies neither `Framed-IP-Address` nor
+`Framed-Pool`, the CHR's `fiberlab-radius` PPP profile assigns an address from
+the managed `fiberlab-subscribers` pool (`172.30.0.10–172.30.3.254`). This keeps
+PPP and traffic working with servers that return only a rate policy. Explicit
+RADIUS address/pool assignments take precedence. Fiberlab recreates its tagged
+pool on lab start and preserves operator-created pools. When mixing fixed
+addresses and dynamic pools on an external server, use disjoint ranges in the
+RADIUS policy to avoid duplicate addresses.
+
 ## Local control API
 
 ONU ACS settings, native RPCs, connection-request authentication and reference

@@ -228,7 +228,7 @@ func ConfigureRouter(ctx context.Context, c *routeros.Client, lab model.Lab, nod
 	run := func(args ...string) error { _, err := c.RunArgsContext(ctx, args); return err }
 	// Only tagged Fiberlab-managed entries are reconciled. Operator-created
 	// RouterOS configuration survives a stop/start in the persistent overlay.
-	for _, path := range []string{"/interface/pppoe-server/server", "/interface/vlan", "/ip/address", "/ip/route", "/ip/firewall/nat", "/radius", "/ppp/profile"} {
+	for _, path := range []string{"/interface/pppoe-server/server", "/interface/vlan", "/ip/address", "/ip/route", "/ip/firewall/nat", "/radius", "/ppp/profile", "/ip/pool"} {
 		reply, err := c.RunArgsContext(ctx, []string{path + "/print", "?comment=fiberlab"})
 		if err != nil {
 			return err
@@ -248,7 +248,13 @@ func ConfigureRouter(ctx context.Context, c *routeros.Client, lab model.Lab, nod
 	if err := run("/ip/firewall/nat/add", "=chain=srcnat", "=src-address=172.30.0.0/22", "=out-interface=ether2", "=action=masquerade", "=comment=fiberlab"); err != nil {
 		return err
 	}
-	if err := run("/ppp/profile/add", "=name=fiberlab-radius", "=local-address=172.30.0.1", "=change-tcp-mss=yes", "=only-one=yes", "=comment=fiberlab"); err != nil {
+	// External RADIUS may authorize a subscriber without assigning an IP.
+	// RouterOS uses this pool only when RADIUS supplies no address or pool;
+	// built-in Framed-IP-Address assignments still take precedence.
+	if err := run("/ip/pool/add", "=name=fiberlab-subscribers", "=ranges=172.30.0.10-172.30.3.254", "=comment=fiberlab"); err != nil {
+		return err
+	}
+	if err := run("/ppp/profile/add", "=name=fiberlab-radius", "=local-address=172.30.0.1", "=remote-address=fiberlab-subscribers", "=change-tcp-mss=yes", "=only-one=yes", "=comment=fiberlab"); err != nil {
 		return err
 	}
 	if err := run("/ppp/aaa/set", "=use-radius=yes", "=accounting=yes", "=interim-update="+strconv.Itoa(lab.Radius.InterimSeconds)+"s"); err != nil {

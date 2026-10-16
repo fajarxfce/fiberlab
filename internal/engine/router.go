@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -257,7 +258,7 @@ func ConfigureRouter(ctx context.Context, c *routeros.Client, lab model.Lab, nod
 	if lab.Radius.Mode == "builtin" {
 		address = "10.203.0.1"
 	} else if !strings.HasPrefix(address, "10.203.0.") {
-		if err := run("/ip/route/add", "=dst-address="+address+"/32", "=gateway=10.203.0.1", "=comment=fiberlab"); err != nil {
+		if err := configureRadiusRoute(ctx, c, address); err != nil {
 			return err
 		}
 	}
@@ -304,6 +305,37 @@ func ConfigureRouter(ctx context.Context, c *routeros.Client, lab model.Lab, nod
 		}
 	}
 	return nil
+}
+
+func configureRadiusRoute(ctx context.Context, c *routeros.Client, address string) error {
+	target, err := netip.ParseAddr(address)
+	if err != nil {
+		return fmt.Errorf("invalid RADIUS address: %w", err)
+	}
+	routes, err := c.RunArgsContext(ctx, []string{"/ip/route/print", "=.proplist=dst-address,disabled,routing-table"})
+	if err != nil {
+		return err
+	}
+	for _, route := range routes.Re {
+		if routeCoversAddress(route.Map, target) {
+			return nil
+		}
+	}
+	// Labs without an operator-provided route can reach an external RADIUS
+	// through the host. Never override an existing WAN or VPN route with this
+	// /32: the RADIUS IP may also host the VPN's public endpoint.
+	_, err = c.RunArgsContext(ctx, []string{"/ip/route/add", "=dst-address=" + address + "/32", "=gateway=10.203.0.1", "=comment=fiberlab"})
+	return err
+}
+
+func routeCoversAddress(route map[string]string, address netip.Addr) bool {
+	if route["disabled"] == "true" || (route["routing-table"] != "" && route["routing-table"] != "main") {
+		return false
+	}
+	// Keep configured routes even while their interface is reconnecting.
+	// Testing only active routes could pin a VPN destination to management.
+	prefix, err := netip.ParsePrefix(route["dst-address"])
+	return err == nil && prefix.Contains(address)
 }
 
 func QMP(ctx context.Context, socket, operation string) error {

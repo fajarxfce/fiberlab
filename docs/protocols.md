@@ -123,6 +123,13 @@ accounts, policies, accounting and disconnects. The UI disables local policy
 changes in this mode. The simulator still shows kernel PPP counters and assigned
 addresses but cannot invent accounting session IDs from an external server.
 
+External RADIUS uses the CHR's existing routes, including its Internet default
+route and VPN subnets. Fiberlab only adds a host route through `10.203.0.1` when
+no enabled route in the main routing table covers the server. This keeps a
+RADIUS server that shares its public IP with a VPN endpoint on the WAN path.
+For RADIUS over VPN, select the server's tunnel IP and register the CHR's tunnel
+IP as the NAS on that server; the shared secret must match.
+
 ## Local control API
 
 ONU ACS settings, native RPCs, connection-request authentication and reference

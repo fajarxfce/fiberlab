@@ -133,6 +133,7 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 		conn.Close()
 	}
 	verifyWinbox(client)
+	verifyCHRExternalRadiusRouting(t, ctx, client, lab, node)
 	servers, err := client.RunArgsContext(ctx, []string{"/interface/pppoe-server/server/print", "?comment=fiberlab"})
 	if err != nil || len(servers.Re) != 4*len(node.Config.ServiceVLANs) {
 		t.Fatalf("PPPoE servers after reconcile: %+v %v", servers, err)
@@ -164,6 +165,48 @@ func TestCHRBootAndNativeAPI(t *testing.T) {
 	defer reconnected.Close()
 	verifyWinbox(reconnected)
 	t.Log("Verified saved router login and Winbox TCP 8291 before and after reboot")
+}
+
+func verifyCHRExternalRadiusRouting(t *testing.T, ctx context.Context, client *routeros.Client, lab model.Lab, node model.Node) {
+	t.Helper()
+	run := func(args ...string) *routeros.Reply {
+		t.Helper()
+		reply, err := client.RunArgsContext(ctx, args)
+		if err != nil {
+			t.Fatalf("CHR %s: %v", args[0], err)
+		}
+		return reply
+	}
+	const address = "198.51.100.42"
+	const comment = "fiberlab-internet-regression"
+	run("/ip/route/add", "=dst-address=0.0.0.0/0", "=gateway=198.18.0.1", "=comment="+comment)
+	// Reproduce the old managed route left behind when RADIUS and the VPN
+	// endpoint share an IP. Reconciliation must remove it and use the WAN.
+	run("/ip/route/add", "=dst-address="+address+"/32", "=gateway=10.203.0.1", "=comment=fiberlab")
+	external := lab
+	external.Radius.Mode, external.Radius.Address = "external", address
+	for pass := 0; pass < 2; pass++ {
+		if err := ConfigureRouter(ctx, client, external, node, 0); err != nil {
+			t.Fatal(err)
+		}
+		if rows := run("/ip/route/print", "?dst-address="+address+"/32").Re; len(rows) != 0 {
+			t.Fatalf("external RADIUS overrides the existing WAN route on pass %d: %+v", pass+1, rows[0].Map)
+		}
+		if rows := run("/ip/route/print", "?comment="+comment).Re; len(rows) != 1 || rows[0].Map["gateway"] != "198.18.0.1" {
+			t.Fatal("external RADIUS changed the operator's default route")
+		}
+		rows := run("/radius/print", "?comment=fiberlab", "=.proplist=address").Re
+		if len(rows) != 1 || rows[0].Map["address"] != address {
+			t.Fatal("external RADIUS destination was not configured")
+		}
+	}
+	for _, row := range run("/ip/route/print", "?comment="+comment).Re {
+		run("/ip/route/remove", "=.id="+row.Map[".id"])
+	}
+	if err := ConfigureRouter(ctx, client, lab, node, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Verified external RADIUS preserves the WAN route across repeated configuration")
 }
 
 // The CHR's second access NIC acts as a real PPPoE client, wired back through

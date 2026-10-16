@@ -33,6 +33,8 @@ For each CHR that should use this uplink, add a default route and DNS servers in
 
 These RouterOS settings persist in that router's disk across lab stop/start and runtime recreation. Use the `fiberlab-internet` comment: the exact `fiberlab` comment is reserved for configuration rebuilt by the simulator. New labs or replacement router disks need their own route and DNS configuration. The existing CHR NAT also covers the PPPoE subscriber pool `172.30.0.0/22`; subscribers need a DNS server configured on their client. Changing the deployment flag requires recreating the container; restarting it keeps its existing environment.
 
+External RADIUS respects these existing routes. In particular, selecting a RADIUS server that shares its public IP with an OpenVPN server must keep using the Internet default route. Older releases forced that IP through management with a `/32` route, breaking the VPN. The next lab start removes that old managed route. If RADIUS itself should travel inside the VPN, use its tunnel IP and register the router's tunnel IP as the NAS.
+
 To enable automatic deployment, configure these secrets in GitHub environment `production`, then set the repository variable `DEPLOY_ENABLED` to `true`. Without this variable, pushes run verification only; the installed application continues running.
 
 | Secret | Purpose |

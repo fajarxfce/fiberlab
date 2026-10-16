@@ -137,6 +137,8 @@ export type Session = {
   peer?: string;
   rxBytes: number;
   txBytes: number;
+  rxBitsPerSecond?: number;
+  txBitsPerSecond?: number;
   uptimeSeconds: number;
   sessionId?: string;
   lastAccounting?: string;
@@ -172,7 +174,27 @@ export type Runtime = {
   metrics: Metrics;
   progress: number;
   acs?: Record<string, ACSStatus>;
+  traffic?: Traffic;
 };
+export type TrafficConfig = {
+  onuIds: string[];
+  downloadKbps: number;
+  uploadKbps: number;
+  durationSeconds: number;
+};
+export type Traffic = {
+  state: 'running' | 'completed' | 'stopped';
+  config: TrafficConfig;
+  startedAt: string;
+  endsAt?: string;
+  stoppedAt?: string;
+  onus: { onuId: string; state: string; error?: string }[];
+};
+export function bitrate(bits = 0): string {
+  if (bits >= 1_000_000) return `${(bits / 1_000_000).toFixed(2)} Mbps`;
+  if (bits >= 1_000) return `${(bits / 1_000).toFixed(1)} Kbps`;
+  return `${Math.round(bits)} bps`;
+}
 export type Check = {
   name: string;
   ok: boolean;

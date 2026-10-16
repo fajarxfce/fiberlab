@@ -146,6 +146,8 @@ The server rejects other Host values and cross-origin browser access.
 | GET /labs/ID/export | Download topology/accounts/faults JSON |
 | POST /labs/import | Import full document as a new lab with revision 1 |
 | POST /labs/ID/start, /stop | Start or stop actual network runtime |
+| POST /labs/ID/traffic | Start real ONU traffic: onuIds, downloadKbps, uploadKbps, durationSeconds (0 = until stopped) |
+| DELETE /labs/ID/traffic | Stop traffic streams while keeping the lab and PPPoE sessions running |
 | GET /labs/ID/runtime | Phase, progress, actual sessions, optical model, metrics and per-ONU ACS status |
 | GET /labs/ID/connections | Native IPs, ports, credentials, active lab and GPON/EPON ONU identities |
 | GET /labs/ID/events?after=SEQ | Up to 200 ordered events after a cursor |

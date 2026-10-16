@@ -227,6 +227,12 @@ func (e *Engine) sample(ctx context.Context) error {
 		e.mu.Unlock()
 		s.SessionID = account.SessionID
 		s.LastAccounting = account.Kind
+		p := previous[sub.ONUID]
+		if s.Status == "connected" && p.Status == "connected" && s.Address == p.Address && s.UptimeSeconds >= p.UptimeSeconds && s.SessionID == p.SessionID {
+			elapsed := s.UpdatedAt.Sub(p.UpdatedAt)
+			s.RXBitsPerSecond = observedRate(s.RXBytes, p.RXBytes, elapsed)
+			s.TXBitsPerSecond = observedRate(s.TXBytes, p.TXBytes, elapsed)
+		}
 		if s.Status == "connected" {
 			metrics.ActiveSessions++
 		}

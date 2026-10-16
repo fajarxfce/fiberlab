@@ -12,8 +12,10 @@
     ArrowDownLeft,
     ArrowUpRight,
     AlertTriangle,
+    ArrowLeftRight,
   } from 'lucide-svelte';
   import TerminalPanel from './TerminalPanel.svelte';
+  import TrafficPanel from './TrafficPanel.svelte';
   import {
     bytes,
     duration,
@@ -32,6 +34,7 @@
     onaction,
     onsetup,
     history,
+    onruntime,
   }: {
     lab: Lab;
     runtime: Runtime | null;
@@ -42,6 +45,7 @@
     onaction: (kind: string, id: string) => void;
     onsetup: () => void;
     history: number[];
+    onruntime: (view: Runtime) => void;
   } = $props();
   let collapsed = $state(false);
   let query = $state('');
@@ -72,7 +76,11 @@
   );
 </script>
 
-<section class="bottom-panel" class:collapsed>
+<section
+  class="bottom-panel"
+  class:collapsed
+  class:traffic-open={tab === 'traffic' && !collapsed}
+>
   <div class="bottom-toolbar">
     <div class="bottom-tabs">
       <button
@@ -91,6 +99,16 @@
         }}
         ><Activity size={14} />Activity{#if lab.faults.length}<span
             class="warning-count">{lab.faults.length}</span
+          >{/if}</button
+      ><button
+        class:active={tab === 'traffic'}
+        onclick={() => {
+          tab = 'traffic';
+          collapsed = false;
+        }}
+        ><ArrowLeftRight
+          size={14}
+        />Traffic{#if runtime?.traffic?.state === 'running'}<span>ON</span
           >{/if}</button
       ><button
         class:active={tab === 'terminal'}
@@ -204,6 +222,12 @@
                 : 'Add an ONU to create its PPPoE subscriber.'}
             </div>{/if}
         </div>
+      {:else if tab === 'traffic'}{#key lab.id}<TrafficPanel
+            {lab}
+            {runtime}
+            {onruntime}
+            {onselect}
+          />{/key}
       {:else if tab === 'activity'}<div class="activity-list">
           {#each [...events].reverse() as event (event.seq)}<div
               class="activity-row level-{event.level}"

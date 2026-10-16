@@ -148,6 +148,8 @@ func (a *App) poll() {
 				a.view.Message = "Network helper disconnected; live device and session state is unknown."
 				for i := range a.view.Sessions {
 					a.view.Sessions[i].Status = "unknown"
+					a.view.Sessions[i].RXBitsPerSecond = 0
+					a.view.Sessions[i].TXBitsPerSecond = 0
 				}
 				for id, n := range a.view.Nodes {
 					n.Status = "unknown"
@@ -237,6 +239,8 @@ func (a *App) Handler() http.Handler {
 	})
 	mux.HandleFunc("POST /api/v1/labs/{id}/start", a.startLab)
 	mux.HandleFunc("POST /api/v1/labs/{id}/stop", a.stopLab)
+	mux.HandleFunc("POST /api/v1/labs/{id}/traffic", a.startTraffic)
+	mux.HandleFunc("DELETE /api/v1/labs/{id}/traffic", a.stopTraffic)
 	mux.HandleFunc("POST /api/v1/labs/{id}/actions", a.action)
 	mux.HandleFunc("POST /api/v1/labs/{id}/faults", a.addFault)
 	mux.HandleFunc("DELETE /api/v1/labs/{id}/faults/{fault}", a.removeFault)

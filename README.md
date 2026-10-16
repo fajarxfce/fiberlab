@@ -165,6 +165,12 @@ merupakan hasil model, termasuk saat menampilkan preview.
 
 ## Ringan, dengan biaya VM yang terlihat
 
+Panel **Traffic** menyediakan download/upload nyata per ONU atau semua ONU,
+dengan target Kbps, durasi, dan tombol stop. Counter PPPoE MikroTik, SNMP, dan
+RADIUS ikut bertambah karena paket benar-benar melewati CHR. Server WAN ada di
+lab sehingga tidak memakai kuota Internet. Lihat [panduan traffic](docs/traffic.md)
+untuk arah RX/TX, batas lisensi CHR, dan koneksi accounting ke aplikasi FTTH.
+
 Runtime aplikasi tidak membutuhkan Node.js, Docker, Redis, atau database server.
 Terminal xterm dimuat hanya ketika dibuka. OLT tidak membuat satu VM per ONU;
 yang dialokasikan adalah namespace, pasangan veth, dan pppd untuk setiap

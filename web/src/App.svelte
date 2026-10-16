@@ -1167,6 +1167,9 @@
           onaction={action}
           onsetup={() => (settings = true)}
           {history}
+          onruntime={(view) => {
+            if (view.labId === lab?.id) runtime = view;
+          }}
         />{/if}
     </section>
     {#if lab}<Inspector

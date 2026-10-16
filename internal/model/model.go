@@ -116,17 +116,19 @@ type NodeState struct {
 	ManagementIP  string   `json:"managementIp,omitempty"`
 }
 type Session struct {
-	ONUID          string    `json:"onuId"`
-	Username       string    `json:"username"`
-	Status         string    `json:"status"`
-	Address        string    `json:"address,omitempty"`
-	Peer           string    `json:"peer,omitempty"`
-	RXBytes        uint64    `json:"rxBytes"`
-	TXBytes        uint64    `json:"txBytes"`
-	UptimeSeconds  int64     `json:"uptimeSeconds"`
-	SessionID      string    `json:"sessionId,omitempty"`
-	LastAccounting string    `json:"lastAccounting,omitempty"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ONUID           string    `json:"onuId"`
+	Username        string    `json:"username"`
+	Status          string    `json:"status"`
+	Address         string    `json:"address,omitempty"`
+	Peer            string    `json:"peer,omitempty"`
+	RXBytes         uint64    `json:"rxBytes"`
+	TXBytes         uint64    `json:"txBytes"`
+	RXBitsPerSecond uint64    `json:"rxBitsPerSecond"`
+	TXBitsPerSecond uint64    `json:"txBitsPerSecond"`
+	UptimeSeconds   int64     `json:"uptimeSeconds"`
+	SessionID       string    `json:"sessionId,omitempty"`
+	LastAccounting  string    `json:"lastAccounting,omitempty"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 type Event struct {
 	Seq     int64     `json:"seq"`
@@ -159,6 +161,7 @@ type RuntimeView struct {
 	Progress  int                  `json:"progress"`
 	Events    []Event              `json:"events,omitempty"`
 	ACS       map[string]ACSStatus `json:"acs,omitempty"`
+	Traffic   *TrafficView         `json:"traffic,omitempty"`
 }
 type Action struct {
 	Kind     string `json:"kind"`

@@ -134,6 +134,30 @@ func ServeDaemon(ctx context.Context, socket string, e *Engine) error {
 		}
 		write(w, 200, map[string]string{"output": output})
 	})
+	mux.HandleFunc("POST /traffic/start", func(w http.ResponseWriter, r *http.Request) {
+		var spec TrafficSpec
+		if !decode(w, r, &spec) {
+			return
+		}
+		if err := e.StartTraffic(spec); err != nil {
+			fail(w, err)
+			return
+		}
+		write(w, 202, e.Snapshot())
+	})
+	mux.HandleFunc("POST /traffic/stop", func(w http.ResponseWriter, r *http.Request) {
+		var spec struct {
+			LabID string `json:"labId"`
+		}
+		if !decode(w, r, &spec) {
+			return
+		}
+		if err := e.StopTraffic(spec.LabID); err != nil {
+			fail(w, err)
+			return
+		}
+		write(w, 200, e.Snapshot())
+	})
 	mux.HandleFunc("POST /capture", func(w http.ResponseWriter, r *http.Request) {
 		var spec CaptureSpec
 		if !decode(w, r, &spec) {

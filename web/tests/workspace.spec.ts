@@ -33,6 +33,120 @@ async function runtime(page: Page, request: APIRequestContext) {
   return (await request.get('/api/v1/labs/' + lab.id + '/runtime')).json();
 }
 
+test('traffic controls require a running lab and select individual ONUs', async ({
+  page,
+  request,
+}) => {
+  await page.getByRole('button', { name: 'Traffic', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Start traffic', exact: true })
+  ).toBeDisabled();
+  await expect(
+    page.getByText('Start the lab first', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByTestId('traffic-download')).toHaveText('0 bps');
+  await expect(page.locator('.traffic-table tbody tr')).toHaveCount(8);
+  await page
+    .getByLabel('Traffic target', { exact: true })
+    .selectOption('onu-0003');
+  await expect(page.locator('.traffic-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.traffic-table tbody')).toContainText('onu-0003');
+  await page.getByLabel('Download per ONU (Kbps)', { exact: true }).fill('0');
+  await page.getByLabel('Upload per ONU (Kbps)', { exact: true }).fill('0');
+  await expect(page.getByRole('alert')).toHaveText(
+    'Set a positive download or upload rate.'
+  );
+  const before = await current(page, request);
+  await page.getByLabel('Download per ONU (Kbps)', { exact: true }).fill('128');
+  await page.getByLabel('Traffic duration', { exact: true }).selectOption('0');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect((await current(page, request)).revision).toBe(before.revision);
+});
+
+test('traffic UI sends rates and stops the same lab job', async ({
+  page,
+  request,
+}) => {
+  const lab = await current(page, request);
+  const view = await runtime(page, request);
+  view.phase = 'running';
+  view.sessions = view.sessions.map((s: any) => ({
+    ...s,
+    status: 'connected',
+    rxBitsPerSecond: 64_000,
+    txBitsPerSecond: 16_000,
+  }));
+  let sent: any = null;
+  let stopped = false;
+  // This browser test checks controls with explicit transport fixtures. Real
+  // sockets and CHR counters are exercised by the kernel/native traffic tests.
+  await page.route(`**/api/v1/labs/${lab.id}/runtime`, (route) =>
+    route.fulfill({ json: view })
+  );
+  await page.route(`**/api/v1/labs/${lab.id}/stream`, (route) =>
+    route.fulfill({
+      contentType: 'text/event-stream',
+      body: ': browser control fixture\n\n',
+    })
+  );
+  await page.route(`**/api/v1/labs/${lab.id}/traffic`, async (route) => {
+    if (route.request().method() === 'POST') {
+      sent = route.request().postDataJSON();
+      view.traffic = {
+        state: 'running',
+        config: sent,
+        startedAt: new Date().toISOString(),
+        onus: sent.onuIds.map((onuId: string) => ({
+          onuId,
+          state: 'streaming',
+        })),
+      };
+    } else {
+      stopped = true;
+      view.traffic = {
+        ...view.traffic,
+        state: 'stopped',
+        stoppedAt: new Date().toISOString(),
+      };
+    }
+    await route.fulfill({ json: view });
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Traffic', exact: true }).click();
+  await expect(page.getByTestId('traffic-download')).toHaveText('512.0 Kbps');
+  await page
+    .getByLabel('Traffic target', { exact: true })
+    .selectOption('onu-0002');
+  await page.getByLabel('Download per ONU (Kbps)', { exact: true }).fill('256');
+  await page.getByLabel('Upload per ONU (Kbps)', { exact: true }).fill('32');
+  await page
+    .getByRole('button', { name: 'Start traffic', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Stop traffic', exact: true })
+  ).toBeVisible();
+  expect(sent).toEqual({
+    onuIds: ['onu-0002'],
+    downloadKbps: 256,
+    uploadKbps: 32,
+    durationSeconds: 300,
+  });
+  await expect(
+    page.getByLabel('Download per ONU (Kbps)', { exact: true })
+  ).toBeDisabled();
+  await expect(page.getByTestId('traffic-download')).toHaveText('64.0 Kbps');
+  await page.getByRole('button', { name: 'Stop traffic', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Start traffic', exact: true })
+  ).toBeEnabled();
+  expect(stopped).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(
+    page.getByRole('button', { name: 'Start traffic', exact: true })
+  ).toBeInViewport();
+  await page.screenshot({ path: '../artifacts/traffic-controls.png' });
+});
+
 test('fits the complete network and reports stopped sessions', async ({
   page,
   request,

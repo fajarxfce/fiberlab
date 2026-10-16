@@ -21,6 +21,7 @@ import (
 
 	"ftthlab/internal/model"
 	"ftthlab/internal/protocol"
+	"ftthlab/internal/traffic"
 	"github.com/vishvananda/netlink"
 )
 
@@ -64,6 +65,7 @@ type Engine struct {
 	spec              StartSpec
 	view              model.RuntimeView
 	cancel            context.CancelFunc
+	runContext        context.Context
 	done              chan struct{}
 	journal           Journal
 	processes         []*ManagedProcess
@@ -78,6 +80,8 @@ type Engine struct {
 	cli               []*protocol.CLIService
 	radius            *protocol.RadiusService
 	origin            *http.Server
+	trafficOrigin     *traffic.Server
+	traffic           *traffic.Generator
 	acct              map[string]protocol.Accounting
 	eventSeq          int64
 	lastAuth          map[string]string
@@ -98,6 +102,9 @@ func (e *Engine) Snapshot() model.RuntimeView {
 	}
 	v.Sessions = append([]model.Session{}, e.view.Sessions...)
 	v.Events = append([]model.Event{}, e.view.Events...)
+	if e.traffic != nil {
+		v.Traffic = e.traffic.Snapshot()
+	}
 	return v
 }
 func (e *Engine) Event(kind, level, subject, message string) {
@@ -169,6 +176,8 @@ func (e *Engine) Start(spec StartSpec) error {
 	e.lab = spec.Lab
 	e.spec = spec
 	e.cancel = cancel
+	e.runContext = ctx
+	e.traffic = &traffic.Generator{}
 	e.done = make(chan struct{})
 	e.view = model.Preview(spec.Lab)
 	e.view.RunID = runID
@@ -225,6 +234,8 @@ func (e *Engine) run(ctx context.Context) {
 	e.view.Nodes = model.Derive(e.lab, false)
 	for i := range e.view.Sessions {
 		e.view.Sessions[i].Status = "stopped"
+		e.view.Sessions[i].RXBitsPerSecond = 0
+		e.view.Sessions[i].TXBitsPerSecond = 0
 	}
 	e.view.Metrics.ActiveSessions = 0
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -343,6 +354,11 @@ func (e *Engine) startServices() error {
 	}
 	e.origin = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second}
 	go e.origin.Serve(listener)
+	trafficListener, err := net.Listen("tcp4", traffic.Address)
+	if err != nil {
+		return err
+	}
+	e.trafficOrigin = traffic.Serve(trafficListener)
 	return nil
 }
 func (e *Engine) accounting(a protocol.Accounting) {
@@ -491,6 +507,13 @@ func (e *Engine) writeJournal() error {
 	return os.Rename(path+".tmp", path)
 }
 func (e *Engine) cleanup() error {
+	if e.traffic != nil {
+		e.traffic.Stop()
+	}
+	if e.trafficOrigin != nil {
+		e.trafficOrigin.Close()
+		e.trafficOrigin = nil
+	}
 	// Signal the whole cohort first: 500 clients share one grace period.
 	for _, p := range e.processes {
 		select {
